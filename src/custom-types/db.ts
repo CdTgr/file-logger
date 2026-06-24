@@ -1,7 +1,3 @@
-/** Values that can be passed as positional params to node:sqlite statements. */
-export type SqlParam = string | number | bigint | null
-
-/** A single parsed log entry row, ready for insertion into the `logs` table. */
 export interface LogRow {
   log_file: string
   timestamp: string

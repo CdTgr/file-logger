@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { DatabaseSync } from 'node:sqlite'
-
 import fs from 'fs'
 import path from 'path'
 import readline from 'readline'
 
 import { IngestOptions, LogRow } from './custom-types/index.js'
+import { sql } from './db/index.js'
+import { ensurePartitionsForTimestamps } from './db/partitions.js'
 import { initDb } from './db/schema.js'
 
 const BATCH_SIZE = 10_000
@@ -100,7 +100,6 @@ function buildRow(
 }
 
 async function ingestFile(
-  db: DatabaseSync,
   logsDir: string,
   logFile: string,
   force: boolean,
@@ -108,12 +107,12 @@ async function ingestFile(
   const filePath = path.join(logsDir, logFile)
   const stat = fs.statSync(filePath)
 
-  const existing = db
-    .prepare('SELECT * FROM ingestion_log WHERE log_file = ?')
-    .get(logFile) as { file_size: number; row_count: number } | undefined
+  const [existing] = await sql<{ file_size: string; row_count: string }[]>`
+    SELECT file_size, row_count FROM ingestion_log WHERE log_file = ${logFile}
+  `
 
   if (existing && !force) {
-    if (existing.file_size === stat.size) {
+    if (Number(existing.file_size) === stat.size) {
       console.log(
         `[skip] ${logFile} — already ingested (${Number(existing.row_count).toLocaleString()} rows)`,
       )
@@ -121,16 +120,12 @@ async function ingestFile(
       return 0
     }
     console.log(`[update] ${logFile} — file size changed, re-ingesting...`)
-    db.exec(
-      `DELETE FROM logs WHERE log_file = '${logFile.replace(/'/g, "''")}'`,
-    )
-    db.prepare('DELETE FROM ingestion_log WHERE log_file = ?').run(logFile)
+    await sql`DELETE FROM logs WHERE log_file = ${logFile}`
+    await sql`DELETE FROM ingestion_log WHERE log_file = ${logFile}`
   } else if (force) {
     console.log(`[force] ${logFile} — clearing previous data...`)
-    db.exec(
-      `DELETE FROM logs WHERE log_file = '${logFile.replace(/'/g, "''")}'`,
-    )
-    db.prepare('DELETE FROM ingestion_log WHERE log_file = ?').run(logFile)
+    await sql`DELETE FROM logs WHERE log_file = ${logFile}`
+    await sql`DELETE FROM ingestion_log WHERE log_file = ${logFile}`
   }
 
   console.log(
@@ -138,35 +133,36 @@ async function ingestFile(
   )
   const startTime = Date.now()
 
-  const insert = db.prepare(`
-    INSERT INTO logs
-      (log_file, timestamp, timestamp_unix, level, level_num, message,
-       method, url, status_code, response_time, pid, hostname, req_id)
-    VALUES
-      (:log_file, :timestamp, :timestamp_unix, :level, :level_num, :message,
-       :method, :url, :status_code, :response_time, :pid, :hostname, :req_id)
-  `)
-
   const rl = readline.createInterface({
     input: fs.createReadStream(filePath),
     crlfDelay: Infinity,
   })
+  const TS_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2} [+-]\d{2}:\d{2}): (.*)$/s
 
   let batch: LogRow[] = []
   let total = 0
   let pending: LogRow | null = null
-  const TS_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2} [+-]\d{2}:\d{2}): (.*)$/s
 
-  const flushBatch = (rows: LogRow[]): void => {
-    db.exec('BEGIN')
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const r of rows) insert.run(r as any)
-      db.exec('COMMIT')
-    } catch (e) {
-      db.exec('ROLLBACK')
-      throw e
-    }
+  const flushBatch = async (rows: LogRow[]): Promise<void> => {
+    await ensurePartitionsForTimestamps(rows.map((r) => r.timestamp_unix))
+    const insertData = rows.map((r) => ({
+      log_file: r.log_file,
+      timestamp: r.timestamp,
+      timestamp_unix: r.timestamp_unix,
+      level: r.level,
+      level_num: r.level_num,
+      message: r.message,
+      method: r.method,
+      url: r.url,
+      status_code: r.status_code,
+      response_time: r.response_time,
+      pid: r.pid,
+      hostname: r.hostname,
+      req_id: r.req_id,
+    }))
+    await sql`
+      INSERT INTO logs ${sql(insertData, 'log_file', 'timestamp', 'timestamp_unix', 'level', 'level_num', 'message', 'method', 'url', 'status_code', 'response_time', 'pid', 'hostname', 'req_id')}
+    `
   }
 
   for await (const line of rl) {
@@ -176,7 +172,7 @@ async function ingestFile(
       if (pending) {
         batch.push(pending)
         if (batch.length >= BATCH_SIZE) {
-          flushBatch(batch)
+          await flushBatch(batch)
           total += batch.length
           batch = []
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(0)
@@ -194,41 +190,38 @@ async function ingestFile(
 
   if (pending) batch.push(pending)
   if (batch.length) {
-    flushBatch(batch)
+    await flushBatch(batch)
     total += batch.length
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
   console.log(`\n  Done: ${total.toLocaleString()} rows in ${elapsed}s`)
 
-  db.prepare('INSERT OR REPLACE INTO ingestion_log VALUES (?, ?, ?, ?)').run(
-    logFile,
-    new Date().toISOString(),
-    total,
-    stat.size,
-  )
+  await sql`
+    INSERT INTO ingestion_log (log_file, ingested_at, row_count, file_size)
+    VALUES (${logFile}, NOW(), ${total}, ${stat.size})
+    ON CONFLICT (log_file) DO UPDATE SET
+      row_count = ${total},
+      file_size = ${stat.size},
+      ingested_at = NOW()
+  `
 
   return total
 }
 
 export async function runIngest(options: IngestOptions = {}): Promise<number> {
-  const { force = false, checkOnly = false, logsDir, dbPath } = options
+  const { force = false, checkOnly = false, logsDir } = options
   const resolvedLogsDir =
     logsDir || process.env.LOGS_DIR || path.join(process.cwd(), 'logs')
-  const resolvedDbPath =
-    dbPath || process.env.DB_PATH || path.join(process.cwd(), 'logs.db')
 
-  const db = new DatabaseSync(resolvedDbPath)
-  initDb(db)
+  await initDb()
 
   if (checkOnly) {
-    const rows = db
-      .prepare('SELECT * FROM ingestion_log ORDER BY log_file')
-      .all() as {
-      log_file: string
-      row_count: number
-      ingested_at: string
-    }[]
+    const rows = await sql<
+      { log_file: string; row_count: string; ingested_at: string }[]
+    >`
+      SELECT log_file, row_count, ingested_at FROM ingestion_log ORDER BY log_file
+    `
     if (!rows.length) {
       console.log('No files ingested yet.')
     } else {
@@ -239,7 +232,6 @@ export async function runIngest(options: IngestOptions = {}): Promise<number> {
         )
       }
     }
-    db.close()
 
     return 0
   }
@@ -247,29 +239,18 @@ export async function runIngest(options: IngestOptions = {}): Promise<number> {
   const files = findLogFiles(resolvedLogsDir)
   if (!files.length) {
     console.log('No log files found in ' + resolvedLogsDir)
-    db.close()
 
     return 0
   }
 
   let totalInserted = 0
   for (const file of files) {
-    totalInserted += await ingestFile(db, resolvedLogsDir, file, force)
+    totalInserted += await ingestFile(resolvedLogsDir, file, force)
   }
 
-  if (totalInserted > 0) {
-    console.log('\nBuilding full-text search index...')
-    const t = Date.now()
-    db.exec(`INSERT INTO logs_fts(logs_fts) VALUES('rebuild')`)
-    console.log(`FTS index built in ${((Date.now() - t) / 1000).toFixed(1)}s`)
-  }
-
-  const countRow = db.prepare('SELECT COUNT(*) as n FROM logs').get() as {
-    n: number
-  }
+  const [countRow] = await sql<{ n: string }[]>`SELECT COUNT(*) as n FROM logs`
   console.log(`\nTotal rows in DB: ${Number(countRow.n).toLocaleString()}`)
   console.log('Run `npm start` to launch the dashboard.')
-  db.close()
 
   return totalInserted
 }
@@ -278,6 +259,7 @@ async function main(): Promise<void> {
   const force = process.argv.includes('--force')
   const checkOnly = process.argv.includes('--check')
   await runIngest({ force, checkOnly })
+  await sql.end()
 }
 
 if (require.main === module) {

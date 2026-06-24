@@ -1,22 +1,40 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: logger
+      POSTGRES_PASSWORD: logger
+      POSTGRES_DB: logger
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U logger']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   file-logger:
     build: .
     ports:
       - '${PORT:-3000}:3000'
     volumes:
-      - ./logs:/app/logs # host log files → container (read by watcher too)
-      - db-data:/app/data # SQLite DB persisted across restarts
+      - ./logs:/app/logs
     environment:
-      - DB_PATH=/app/data/logs.db
+      - DATABASE_URL=postgres://logger:logger@postgres:5432/logger
+      - LOGS_DIR=/app/logs
       - PORT=3000
-      - POLL_MS=5000 # polling interval in ms; fallback for when fs.watch events don't fire (Docker Desktop on macOS/Windows)
+      - POLL_MS=5000
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/api/status']
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 60s # allow time for initial ingest
+      start_period: 10s
 
 volumes:
-  db-data:
+  pg-data:

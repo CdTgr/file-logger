@@ -2,7 +2,7 @@
 
 > See also: [Architecture](./architecture.md) · [Database Schema](./database-schema.md)
 
-All API routes are mounted under `/api/`. Responses are JSON unless noted.
+All API routes are mounted under `/api/`. Responses are JSON unless noted. Routes use async PostgreSQL queries via the `sql` pool singleton from `src/db/index.ts`.
 
 ---
 
@@ -20,13 +20,13 @@ Returns database readiness and total entry count.
   ]
 }
 ```
-Returns `{ "ready": false }` if the database file does not exist.
+Returns `{ "ready": false }` if the PostgreSQL query fails (e.g. DB not yet reachable).
 
 ---
 
 ## `GET /api/files`
 
-Returns the list of distinct log files ingested into the database.
+Returns the list of distinct log files present in the database.
 
 **Response**
 ```json
@@ -46,10 +46,12 @@ Paginated log entry search with optional full-text search.
 | `file` | string | — | Filter by log file name |
 | `level` | string | ALL | Filter by level (TRACE/DEBUG/INFO/WARN/ERROR/FATAL) |
 | `from` | date | — | Start date (YYYY-MM-DD) |
-| `to` | date | — | End date (YYYY-MM-DD, inclusive) |
-| `q` | string | — | Full-text search query (FTS5 syntax) |
+| `to` | date | — | End date (YYYY-MM-DD, inclusive — extended to 23:59:59.999 UTC) |
+| `q` | string | — | Full-text search query (passed to `plainto_tsquery('english', ...)`) |
 | `page` | number | 1 | Page number |
 | `limit` | number | 200 | Page size (10–500) |
+
+Full-text search uses `WHERE message_tsv @@ plainto_tsquery('english', $1)`. The `q` parameter is treated as an AND query of stems — no FTS5 syntax needed.
 
 **Response**
 ```json
@@ -108,9 +110,9 @@ Log count per level, sorted by count descending.
 
 ## `GET /api/stats/timeline`
 
-Log count bucketed by time interval (total, not by level).
+Log count bucketed by time interval (total, not by level). Bucket format uses `to_char(to_timestamp(timestamp_unix / 1000.0), ...)`.
 
-**Query Parameters**: `file`, `from`, `to`, `level`, `interval` (minute/hour/day)
+**Query Parameters**: `file`, `from`, `to`, `level`, `interval` (`minute` / `hour` / `day`, default `hour`)
 
 **Response**
 ```json
@@ -123,7 +125,7 @@ Log count bucketed by time interval (total, not by level).
 
 Log count bucketed by time interval, broken down by level.
 
-**Query Parameters**: `file`, `from`, `to`, `interval` (minute/hour/day)
+**Query Parameters**: `file`, `from`, `to`, `interval` (`minute` / `hour` / `day`, default `hour`)
 
 **Response**
 ```json
@@ -134,7 +136,7 @@ Log count bucketed by time interval, broken down by level.
 
 ## `GET /api/stats/urls`
 
-Top 25 request paths with request count, average response time, and error count.
+Top 25 request paths with request count, average response time, and error count. Query string stripped from URLs via `split_part(url, '?', 1)`.
 
 **Query Parameters**: `file`, `from`, `to`
 
@@ -160,13 +162,13 @@ HTTP status code distribution grouped into 1xx/2xx/3xx/4xx/5xx.
 
 ## `POST /api/ingest`
 
-Triggers log ingestion. Parses all files in `logs/` and writes to SQLite. The read-only DB singleton is reset after ingestion so fresh data is served immediately.
+Triggers log ingestion. Parses all files in `logs/` and writes to PostgreSQL. Skips files whose `file_size` in `ingestion_log` matches the current file size (unless `force: true`).
 
 **Request Body**
 ```json
 { "force": false }
 ```
-- `force: true` — re-ingest all files even if file size hasn't changed
+- `force: true` — clears existing rows for changed files and re-ingests from scratch
 
 **Response**
 ```json
@@ -182,7 +184,7 @@ Triggers log ingestion. Parses all files in `logs/` and writes to SQLite. The re
 
 ## `GET /api/files/download`
 
-Download a raw log file as an attachment.
+Download a raw log file as an attachment. Path traversal is prevented by resolving and checking against `LOGS_DIR`.
 
 **Query Parameters**
 
@@ -190,9 +192,9 @@ Download a raw log file as an attachment.
 |---|---|---|---|
 | `file` | string | Yes | Relative file path within `logs/` (e.g. `CMS-API-error-1.log`) |
 
-**Response**: The raw file with `Content-Disposition: attachment; filename="..."`.
+**Response**: Raw file with `Content-Disposition: attachment; filename="..."`.
 
 **Errors**:
 - `400` — `file` param missing
 - `403` — path traversal attempt
-- `404` — file not found
+- `404` — file not found on disk

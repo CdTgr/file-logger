@@ -2,90 +2,118 @@
 
 > See also: [Log Format](./log-format.md) · [API Reference](./api-reference.md)
 
-SQLite database at `logs.db` (path configurable via `DB_PATH` env var).
-
----
-
-## Table: `logs`
-
-Primary log entry table. One row per log line.
-
-| Column | Type | Description |
-|---|---|---|
-| `id` | INTEGER PK | Auto-increment |
-| `log_file` | TEXT NOT NULL | Relative path within `logs/` (e.g. `CMS-API-error-1.log`) |
-| `timestamp` | TEXT NOT NULL | ISO 8601 timestamp |
-| `timestamp_unix` | INTEGER NOT NULL | Unix timestamp in milliseconds |
-| `level` | TEXT NOT NULL | Normalised level: TRACE/DEBUG/INFO/WARN/ERROR/FATAL |
-| `level_num` | INTEGER | Pino numeric level (10/20/30/40/50/60), NULL for non-pino logs |
-| `message` | TEXT NOT NULL | Log message (may contain newlines for stack traces) |
-| `method` | TEXT | HTTP method (GET/POST/etc.), NULL if not present |
-| `url` | TEXT | Request URL, NULL if not present |
-| `status_code` | INTEGER | HTTP status code, NULL if not present |
-| `response_time` | REAL | Response time in ms (from pino `responseTime` field), NULL if not present |
-| `pid` | INTEGER | Process ID (from pino `pid` field), NULL if not present |
-| `hostname` | TEXT | Hostname (from pino `hostname` field), NULL if not present |
-| `req_id` | TEXT | Request ID (from pino `reqId` field), NULL if not present |
-
-### Indexes
-
-| Name | Columns | Purpose |
-|---|---|---|
-| `idx_ts` | `timestamp_unix` | Time-range queries |
-| `idx_level` | `level` | Level filtering |
-| `idx_file` | `log_file` | File filtering |
-| `idx_file_ts` | `log_file, timestamp_unix` | Per-file time range (most common query) |
-| `idx_file_lvl` | `log_file, level` | Per-file level stats |
+PostgreSQL database. Connection via `DATABASE_URL` env var or individual `POSTGRES_*` vars. Schema created by `initDb()` in `src/db/schema.ts` (idempotent — safe to call on every startup).
 
 ---
 
 ## Table: `ingestion_log`
 
-Tracks which files have been ingested and their byte offset.
+Tracks which files have been ingested and their last known byte offset. The watcher reads this on startup to resume from the correct position, preventing duplicate rows across restarts.
 
 | Column | Type | Description |
 |---|---|---|
-| `log_file` | TEXT PK | Relative file path (matches `logs.log_file`) |
-| `ingested_at` | TEXT NOT NULL | ISO 8601 timestamp of last ingest |
-| `row_count` | INTEGER NOT NULL | Number of rows ingested |
-| `file_size` | INTEGER NOT NULL | File size in bytes at time of ingest (used as byte offset for live watcher) |
+| `log_file` | TEXT PRIMARY KEY | Relative file path within `logs/` (e.g. `CMS-API-error-1.log`) |
+| `ingested_at` | TIMESTAMPTZ NOT NULL | Timestamp of last write |
+| `row_count` | BIGINT NOT NULL | Cumulative rows inserted for this file |
+| `file_size` | BIGINT NOT NULL | Byte offset up to which rows have been inserted; used as the watcher's resume point |
+
+Upserted via `ON CONFLICT (log_file) DO UPDATE SET ...` after every batch insert.
 
 ---
 
-## Virtual Table: `logs_fts`
+## Table: `logs` (partitioned)
 
-FTS5 content table for full-text search on log messages.
+Primary log entry table. Partitioned by `RANGE (timestamp_unix)` into monthly child tables (`logs_YYYY_MM`). Partitions are created on demand by `ensurePartitionsForTimestamps()` in `src/db/partitions.ts` before each batch insert.
 
 ```sql
-CREATE VIRTUAL TABLE logs_fts
-  USING fts5(message, content='logs', content_rowid='id');
+CREATE TABLE logs (
+  id             BIGSERIAL,
+  log_file       TEXT          NOT NULL,
+  timestamp      TIMESTAMPTZ   NOT NULL,
+  timestamp_unix BIGINT        NOT NULL,
+  level          TEXT          NOT NULL DEFAULT 'INFO',
+  level_num      INTEGER,
+  message        TEXT          NOT NULL,
+  message_tsv    TSVECTOR      GENERATED ALWAYS AS
+                   (to_tsvector('english', coalesce(message, ''))) STORED,
+  method         TEXT,
+  url            TEXT,
+  status_code    INTEGER,
+  response_time  REAL,
+  pid            INTEGER,
+  hostname       TEXT,
+  req_id         TEXT,
+  PRIMARY KEY (id, timestamp_unix)
+) PARTITION BY RANGE (timestamp_unix);
 ```
 
-- `content='logs'` — content is stored in the `logs` table, not duplicated
-- Rebuilt in bulk after batch ingest: `INSERT INTO logs_fts(logs_fts) VALUES('rebuild')`
-- Updated incrementally by the watcher: `INSERT INTO logs_fts(rowid, message) VALUES (?, ?)`
+### Column Reference
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | BIGSERIAL | Auto-increment; globally unique across partitions |
+| `log_file` | TEXT NOT NULL | Relative path within `logs/` |
+| `timestamp` | TIMESTAMPTZ NOT NULL | Parsed ISO 8601 timestamp |
+| `timestamp_unix` | BIGINT NOT NULL | Unix timestamp in milliseconds; partition key |
+| `level` | TEXT NOT NULL | Normalised level: TRACE/DEBUG/INFO/WARN/ERROR/FATAL |
+| `level_num` | INTEGER | Pino numeric level (10/20/30/40/50/60); NULL for non-pino logs |
+| `message` | TEXT NOT NULL | Log message (may contain embedded newlines for stack traces) |
+| `message_tsv` | TSVECTOR GENERATED | Always-current full-text search vector; never included in INSERT |
+| `method` | TEXT | HTTP method; NULL if not a request log |
+| `url` | TEXT | Request URL; NULL if not a request log |
+| `status_code` | INTEGER | HTTP status code; NULL if not a request log |
+| `response_time` | REAL | Response time in ms (pino `responseTime`); NULL if absent |
+| `pid` | INTEGER | Process ID (pino `pid`); NULL if absent |
+| `hostname` | TEXT | Hostname (pino `hostname`); NULL if absent |
+| `req_id` | TEXT | Request ID (pino `reqId`); NULL if absent |
+
+### Composite Primary Key
+
+The partition key (`timestamp_unix`) must be part of the primary key in PostgreSQL. The composite `PRIMARY KEY (id, timestamp_unix)` ensures global uniqueness while satisfying this constraint.
+
+### Indexes
+
+Created on the parent table — PostgreSQL 11+ automatically applies them to every new partition.
+
+| Name | Definition | Purpose |
+|---|---|---|
+| `idx_ts` | `(timestamp_unix)` | Time-range queries |
+| `idx_level` | `(level)` | Level filtering |
+| `idx_file` | `(log_file)` | File filtering |
+| `idx_file_ts` | `(log_file, timestamp_unix)` | Per-file time range (most common query) |
+| `idx_file_lvl` | `(log_file, level)` | Per-file level stats |
+| `idx_message_tsv` | `USING GIN (message_tsv)` | Full-text search |
 
 ---
 
-## PRAGMA Settings
+## Monthly Partitions
 
-**Ingest connection** (read-write):
-```sql
-PRAGMA journal_mode = WAL;     -- concurrent reads during write
-PRAGMA synchronous = NORMAL;   -- safe and fast
-PRAGMA temp_store = MEMORY;
-PRAGMA cache_size = -64000;    -- 64 MB cache
+Managed by `src/db/partitions.ts`:
+
+```typescript
+// Example partitions
+logs_2024_11  FOR VALUES FROM (1730419200000) TO (1733011200000)
+logs_2024_12  FOR VALUES FROM (1733011200000) TO (1735689600000)
+logs_2025_01  FOR VALUES FROM (1735689600000) TO (1738368000000)
 ```
 
-**Server connection** (read-only):
+- Named `logs_YYYY_MM`
+- Boundaries are epoch milliseconds for the first day of the month (UTC)
+- Created with `CREATE TABLE IF NOT EXISTS ... PARTITION OF logs FOR VALUES FROM (...) TO (...)`
+- A module-level `Set<string>` caches which partitions have been verified in the current process to avoid redundant DDL calls
+- To drop old data: `DROP TABLE logs_2023_01` — instant, no bloat, no vacuum needed
+
+---
+
+## Full-Text Search
+
+Search is implemented via the `message_tsv` generated column:
+
 ```sql
-PRAGMA journal_mode = WAL;
-PRAGMA cache_size = -32000;    -- 32 MB cache
-PRAGMA query_only = TRUE;      -- prevents accidental writes
+-- Query (used in GET /api/logs)
+WHERE message_tsv @@ plainto_tsquery('english', $1)
 ```
 
-**Watcher connection** (read-write, separate from server):
-```sql
-PRAGMA journal_mode = WAL;
-PRAGMA synchronous = NORMAL;
-```
+`plainto_tsquery` converts the search string to an AND query of lexemes, handling stemming and stop words. The GIN index makes this fast even across partitions.
+
+No separate FTS table or rebuild step. The generated column is maintained automatically on every INSERT.

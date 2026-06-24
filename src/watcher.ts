@@ -1,9 +1,9 @@
-import { DatabaseSync } from 'node:sqlite'
-
 import fs from 'fs'
 import path from 'path'
 
 import { FileState, LogRow, WatcherConfig } from './custom-types/index.js'
+import { sql } from './db/index.js'
+import { ensurePartitionsForTimestamps } from './db/partitions.js'
 import { initDb } from './db/schema.js'
 
 const SETTLE_MS = 300
@@ -105,8 +105,6 @@ function findLogFiles(dir: string, base = ''): string[] {
 }
 
 class LogWatcher {
-  private db: DatabaseSync
-  private insert: ReturnType<DatabaseSync['prepare']>
   private state = new Map<string, FileState>()
   private _dirWatchers = new Map<string, fs.FSWatcher>()
   private _pollTimer: ReturnType<typeof setInterval> | null = null
@@ -114,23 +112,13 @@ class LogWatcher {
 
   constructor(config: WatcherConfig) {
     this.logsDir = config.logsDir
-    this.db = new DatabaseSync(config.dbPath)
-    initDb(this.db)
-    this.insert = this.db.prepare(`
-      INSERT INTO logs
-        (log_file, timestamp, timestamp_unix, level, level_num, message,
-         method, url, status_code, response_time, pid, hostname, req_id)
-      VALUES
-        (:log_file, :timestamp, :timestamp_unix, :level, :level_num, :message,
-         :method, :url, :status_code, :response_time, :pid, :hostname, :req_id)
-    `)
   }
 
-  start(): void {
-    // Resume from last known offset for each file so restarts never duplicate rows
-    const ingested = this.db
-      .prepare('SELECT log_file, file_size FROM ingestion_log')
-      .all() as { log_file: string; file_size: number }[]
+  async start(): Promise<void> {
+    // Resume from saved offsets — prevents duplicate rows on restart
+    const ingested = await sql<{ log_file: string; file_size: string }[]>`
+      SELECT log_file, file_size FROM ingestion_log
+    `
     for (const r of ingested) {
       this.state.set(r.log_file, {
         offset: Number(r.file_size),
@@ -188,7 +176,6 @@ class LogWatcher {
   stop(): void {
     if (this._pollTimer) clearInterval(this._pollTimer)
     for (const w of this._dirWatchers.values()) w.close()
-    this.db.close()
   }
 
   private _watchDir(absDir: string, relBase: string): void {
@@ -228,7 +215,6 @@ class LogWatcher {
       pending: null,
       isReading: false,
     }
-    // If a chunked backfill is already running, it will catch up naturally
     if (s.isReading) {
       this.state.set(logFile, s)
 
@@ -254,174 +240,143 @@ class LogWatcher {
     }
   }
 
-  /**
-   * Read new bytes from a file in CHUNK_SIZE increments, yielding the event
-   * loop between chunks via setImmediate. This keeps the server responsive
-   * during large initial backfills without blocking request handling.
-   */
   private _readChunked(logFile: string): void {
     const s = this.state.get(logFile)
     if (!s || s.isReading) return
     s.isReading = true
-
-    const processChunk = () => {
-      const filePath = path.join(this.logsDir, logFile)
-      if (!fs.existsSync(filePath)) {
-        s.isReading = false
-
-        return
-      }
-
-      const { size } = fs.statSync(filePath)
-      if (size <= s.offset) {
-        s.isReading = false
-
-        return
-      }
-
-      const len = Math.min(size - s.offset, CHUNK_SIZE)
-      const buf = Buffer.alloc(len)
-      const fd = fs.openSync(filePath, 'r')
-      const bytesRead = fs.readSync(fd, buf, 0, len, s.offset)
-      fs.closeSync(fd)
-
-      const text = buf.slice(0, bytesRead).toString('utf8')
-      const atEof = s.offset + bytesRead >= size
-
-      // Only process up to the last complete line
-      const lastNl = text.lastIndexOf('\n')
-      if (lastNl === -1) {
-        // No complete line in this chunk; wait for more data
-        s.isReading = false
-
-        return
-      }
-
-      const processable = text.slice(0, lastNl + 1)
-      const chunkBytes = Buffer.byteLength(processable, 'utf8')
-      const newOffset = s.offset + chunkBytes
-
-      const committed: LogRow[] = []
-      for (const line of processable.split('\n')) {
-        if (!line.trim()) continue
-        const m = line.match(TS_RE)
-        if (m) {
-          if (s.pending) committed.push(s.pending)
-          const parsed = parseTimestamp(m[1])
-          s.pending = parsed ? buildRow(logFile, parsed, m[2].trim()) : null
-        } else if (s.pending) {
-          s.pending.message += '\n' + line.trimEnd()
-        }
-      }
-
-      if (committed.length) {
-        this._insertRows(logFile, committed, newOffset)
-        console.log(
-          `[watcher] ${logFile} +${committed.length} entr${committed.length === 1 ? 'y' : 'ies'}`,
-        )
-      }
-
-      s.offset = newOffset
-
-      if (!atEof) {
-        // More data remains — yield the event loop then continue
-        setImmediate(processChunk)
-      } else {
-        s.isReading = false
-        // Schedule flush of any trailing partial line
-        clearTimeout(s.flushTimer)
-        if (s.pending) {
-          s.flushTimer = setTimeout(() => {
-            if (s.pending) {
-              this._insertRows(logFile, [s.pending], s.offset)
-              console.log(`[watcher] ${logFile} +1 entry (flush)`)
-              s.pending = null
-            }
-          }, FLUSH_MS)
-        }
-      }
-    }
-
-    processChunk()
+    void this._processChunks(logFile)
   }
 
-  private _insertRows(
+  private async _processChunks(logFile: string): Promise<void> {
+    const s = this.state.get(logFile)
+    if (!s) return
+    try {
+      while (true) {
+        const filePath = path.join(this.logsDir, logFile)
+        if (!fs.existsSync(filePath)) break
+
+        const { size } = fs.statSync(filePath)
+        if (size <= s.offset) break
+
+        const len = Math.min(size - s.offset, CHUNK_SIZE)
+        const buf = Buffer.alloc(len)
+        const fd = fs.openSync(filePath, 'r')
+        const bytesRead = fs.readSync(fd, buf, 0, len, s.offset)
+        fs.closeSync(fd)
+
+        const text = buf.slice(0, bytesRead).toString('utf8')
+        const atEof = s.offset + bytesRead >= size
+        const lastNl = text.lastIndexOf('\n')
+        if (lastNl === -1) break
+
+        const processable = text.slice(0, lastNl + 1)
+        const chunkBytes = Buffer.byteLength(processable, 'utf8')
+        const newOffset = s.offset + chunkBytes
+
+        const committed: LogRow[] = []
+        for (const line of processable.split('\n')) {
+          if (!line.trim()) continue
+          const m = line.match(TS_RE)
+          if (m) {
+            if (s.pending) committed.push(s.pending)
+            const parsed = parseTimestamp(m[1])
+            s.pending = parsed ? buildRow(logFile, parsed, m[2].trim()) : null
+          } else if (s.pending) {
+            s.pending.message += '\n' + line.trimEnd()
+          }
+        }
+
+        if (committed.length) {
+          await this._insertRows(logFile, committed, newOffset)
+          console.log(
+            `[watcher] ${logFile} +${committed.length} entr${committed.length === 1 ? 'y' : 'ies'}`,
+          )
+        }
+
+        s.offset = newOffset
+
+        if (atEof) {
+          clearTimeout(s.flushTimer)
+          if (s.pending) {
+            s.flushTimer = setTimeout(() => {
+              void this._flushPending(logFile)
+            }, FLUSH_MS)
+          }
+          break
+        }
+
+        // Yield event loop between chunks so HTTP requests aren't blocked
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      }
+    } finally {
+      s.isReading = false
+    }
+  }
+
+  private async _flushPending(logFile: string): Promise<void> {
+    const s = this.state.get(logFile)
+    if (!s?.pending) return
+    await this._insertRows(logFile, [s.pending], s.offset)
+    console.log(`[watcher] ${logFile} +1 entry (flush)`)
+    s.pending = null
+  }
+
+  private async _insertRows(
     logFile: string,
     rows: LogRow[],
     newFileSize: number,
-  ): void {
-    this.db.exec('BEGIN')
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const r of rows) this.insert.run(r as any)
-      this.db.exec('COMMIT')
-    } catch (e) {
-      this.db.exec('ROLLBACK')
-      console.error('[watcher] insert error:', (e as Error).message)
+  ): Promise<void> {
+    await ensurePartitionsForTimestamps(rows.map((r) => r.timestamp_unix))
 
-      return
-    }
+    const insertData = rows.map((r) => ({
+      log_file: r.log_file,
+      timestamp: r.timestamp,
+      timestamp_unix: r.timestamp_unix,
+      level: r.level,
+      level_num: r.level_num,
+      message: r.message,
+      method: r.method,
+      url: r.url,
+      status_code: r.status_code,
+      response_time: r.response_time,
+      pid: r.pid,
+      hostname: r.hostname,
+      req_id: r.req_id,
+    }))
 
-    try {
-      const ids = (
-        this.db
-          .prepare(
-            'SELECT id FROM logs WHERE log_file = ? ORDER BY id DESC LIMIT ?',
-          )
-          .all(logFile, rows.length) as { id: number }[]
-      ).map((r) => Number(r.id))
+    await sql`
+      INSERT INTO logs ${sql(insertData, 'log_file', 'timestamp', 'timestamp_unix', 'level', 'level_num', 'message', 'method', 'url', 'status_code', 'response_time', 'pid', 'hostname', 'req_id')}
+    `
 
-      if (ids.length) {
-        this.db.exec('BEGIN')
-        const ftsInsert = this.db.prepare(
-          'INSERT INTO logs_fts(rowid, message) VALUES (?, ?)',
-        )
-        for (const id of ids) {
-          const msgRow = this.db
-            .prepare('SELECT message FROM logs WHERE id = ?')
-            .get(id) as { message: string } | undefined
-          ftsInsert.run(id, msgRow?.message ?? '')
-        }
-        this.db.exec('COMMIT')
-      }
-    } catch {
-      /* FTS errors are non-fatal */
-    }
-
-    const exists = this.db
-      .prepare('SELECT 1 FROM ingestion_log WHERE log_file = ?')
-      .get(logFile)
-    if (exists) {
-      this.db
-        .prepare(
-          'UPDATE ingestion_log SET file_size = ?, row_count = row_count + ?, ingested_at = ? WHERE log_file = ?',
-        )
-        .run(newFileSize, rows.length, new Date().toISOString(), logFile)
-    } else {
-      this.db
-        .prepare('INSERT INTO ingestion_log VALUES (?, ?, ?, ?)')
-        .run(logFile, new Date().toISOString(), rows.length, newFileSize)
-    }
+    await sql`
+      INSERT INTO ingestion_log (log_file, ingested_at, row_count, file_size)
+      VALUES (${logFile}, NOW(), ${rows.length}, ${newFileSize})
+      ON CONFLICT (log_file) DO UPDATE SET
+        file_size = ${newFileSize},
+        row_count = ingestion_log.row_count + ${rows.length},
+        ingested_at = NOW()
+    `
   }
 }
 
-export function startWatcher(config: WatcherConfig): LogWatcher {
+export async function startWatcher(config: WatcherConfig): Promise<LogWatcher> {
+  await initDb()
   const w = new LogWatcher(config)
-  w.start()
+  await w.start()
 
   return w
 }
 
 if (require.main === module) {
   const logsDir = process.env.LOGS_DIR || path.join(process.cwd(), 'logs')
-  const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'logs.db')
-  const watcher = startWatcher({ logsDir, dbPath })
-  process.on('SIGINT', () => {
-    watcher.stop()
-    process.exit(0)
-  })
-  process.on('SIGTERM', () => {
-    watcher.stop()
-    process.exit(0)
+  void startWatcher({ logsDir }).then((watcher) => {
+    process.on('SIGINT', () => {
+      watcher.stop()
+      process.exit(0)
+    })
+    process.on('SIGTERM', () => {
+      watcher.stop()
+      process.exit(0)
+    })
   })
 }

@@ -1,64 +1,30 @@
-import { FastifyReply } from 'fastify'
+import { sql } from '../db/index.js'
 
-import { FilterParams, SqlParam } from '../custom-types/index.js'
-import { getDb } from '../db/index.js'
-
-/** Build a WHERE clause from common filter params, pushing values into `params`. */
-export function buildWhere(
-  params: SqlParam[],
-  { file, level, from, to }: FilterParams,
-): string {
-  const conds: string[] = []
-
-  if (file) {
-    conds.push('log_file = ?')
-    params.push(file)
-  }
-
-  if (level && level !== 'ALL') {
-    conds.push('level = ?')
-    params.push(level)
-  }
-
-  if (from) {
-    conds.push('timestamp_unix >= ?')
-    params.push(new Date(from).getTime())
-  }
-
-  if (to) {
-    const d = new Date(to)
-    d.setUTCHours(23, 59, 59, 999)
-    conds.push('timestamp_unix <= ?')
-    params.push(d.getTime())
-  }
-
-  return conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+export function fileFilter(file?: string) {
+  return file ? sql`AND log_file = ${file}` : sql``
 }
 
-/** Return the SQLite bucket expression for a given time interval. */
-export function bucketExpr(interval: string): string {
-  if (interval === 'minute') {
-    return "strftime('%Y-%m-%d %H:%M', datetime(timestamp_unix/1000, 'unixepoch'))"
-  }
-
-  if (interval === 'day') {
-    return "strftime('%Y-%m-%d', datetime(timestamp_unix/1000, 'unixepoch'))"
-  }
-
-  return "strftime('%Y-%m-%d %H:00', datetime(timestamp_unix/1000, 'unixepoch'))"
+export function levelFilter(level?: string) {
+  return level && level !== 'ALL' ? sql`AND level = ${level}` : sql``
 }
 
-/** Return the DB or send a 503 and return null. */
-export function dbOrReject(reply: FastifyReply) {
-  const d = getDb()
+export function fromFilter(from?: string) {
+  return from ? sql`AND timestamp_unix >= ${new Date(from).getTime()}` : sql``
+}
 
-  if (!d) {
-    void reply
-      .code(503)
-      .send({ error: 'Database not ready. Run: npm run ingest' })
+export function toFilter(to?: string) {
+  if (!to) return sql``
+  const d = new Date(to)
+  d.setUTCHours(23, 59, 59, 999)
 
-    return null
-  }
+  return sql`AND timestamp_unix <= ${d.getTime()}`
+}
 
-  return d
+export function bucketExpr(interval: string) {
+  if (interval === 'minute')
+    return sql`to_char(to_timestamp(timestamp_unix / 1000.0), 'YYYY-MM-DD HH24:MI')`
+  if (interval === 'day')
+    return sql`to_char(to_timestamp(timestamp_unix / 1000.0), 'YYYY-MM-DD')`
+
+  return sql`to_char(to_timestamp(timestamp_unix / 1000.0), 'YYYY-MM-DD HH24:00')`
 }

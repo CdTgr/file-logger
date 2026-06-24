@@ -1,7 +1,6 @@
 import { FastifyInstance } from 'fastify'
 
 import { ApiConfig } from '../custom-types/index.js'
-import { resetDb } from '../db/index.js'
 import { runIngest } from '../ingest.js'
 
 export async function ingestRoutes(
@@ -13,12 +12,7 @@ export async function ingestRoutes(
     const force = body?.force ?? false
 
     try {
-      const totalInserted = await runIngest({
-        force,
-        logsDir: opts.logsDir,
-        dbPath: opts.dbPath,
-      })
-      resetDb()
+      const totalInserted = await runIngest({ force, logsDir: opts.logsDir })
 
       return reply.send({ success: true, totalInserted })
     } catch (e: unknown) {

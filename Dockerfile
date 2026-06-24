@@ -22,10 +22,9 @@ COPY src/views src/views
 COPY src/public src/public
 COPY package.json ./
 
-RUN mkdir -p /app/logs /app/data
+RUN mkdir -p /app/logs
 
-ENV DB_PATH=/app/data/logs.db \
-    LOGS_DIR=/app/logs \
+ENV LOGS_DIR=/app/logs \
     PORT=3000 \
     NODE_ENV=production
 

@@ -8,11 +8,11 @@
 ## What is this?
 
 **File Logger** is a self-hosted log viewer and visualization dashboard for structured log files. It:
-1. **Ingests** `.log` files from a `logs/` directory into a local SQLite database
-2. **Watches** those files for new entries (live tail) and adds them to the database within seconds
+1. **Watches** `.log`/`.txt` files in a `logs/` directory — on startup the watcher backfills all existing content incrementally, then tails for new entries in real time
+2. **Stores** entries in a PostgreSQL database with monthly range partitions on `timestamp_unix`
 3. **Serves** a browser dashboard with search, filters, timeline charts, level distribution, HTTP stats, and a log table
 
-There is no external database server, no cloud dependency, and no build step for the frontend. One `docker compose up` is enough to run it.
+No blocking ingest at startup — the server is available immediately. An optional CLI (`yarn ingest`) exists for manual full re-ingestion.
 
 ---
 
@@ -20,12 +20,14 @@ There is no external database server, no cloud dependency, and no build step for
 
 | File | Purpose |
 |---|---|
-| `src/server.ts` | Fastify HTTP server; mounts API routes and EJS views |
+| `src/server.ts` | Fastify HTTP server; calls `initDb()`, starts watcher, mounts API routes and EJS views |
 | `src/ingest.ts` | One-shot log parser; exports `runIngest()` used by CLI and `POST /api/ingest` |
-| `src/watcher.ts` | Live file watcher; debounced `fs.watch` + polling fallback for Docker |
-| `src/db/index.ts` | Read-only SQLite connection singleton (`getDb`, `resetDb`) |
-| `src/db/schema.ts` | SQLite schema + `initDb()` |
-| `src/routes/api.ts` | All `/api/*` Fastify routes |
+| `src/watcher.ts` | Async live file watcher; 4 MB chunked reads; `isReading` guard; debounced `fs.watch` + polling |
+| `src/db/index.ts` | Exports `sql` — postgres pool singleton (porsager v3) |
+| `src/db/schema.ts` | Async `initDb()` — creates `ingestion_log`, partitioned `logs` table, indexes |
+| `src/db/partitions.ts` | `ensurePartitionsForTimestamps()` — creates monthly partitions on demand, cached in a `Set` |
+| `src/routes/index.ts` | Registers all route plugins under `registerApiRoutes()` |
+| `src/routes/utils.ts` | Returns `sql\`...\`` fragments: `fileFilter`, `levelFilter`, `fromFilter`, `toFilter`, `bucketExpr` |
 | `src/views/index.ejs` | Main EJS layout; includes all partials |
 | `src/public/js/app.js` | Client-side logic (tabs, charts, log table, ingest/download buttons) |
 | `src/public/css/styles.css` | Dashboard styles |
@@ -34,21 +36,22 @@ There is no external database server, no cloud dependency, and no build step for
 
 ## Architecture
 
-→ See [wiki/architecture.md](.agent/wiki/architecture.md)
+→ See [wiki/architecture.md](./wiki/architecture.md)
 
-The system is three cooperating processes sharing a WAL-mode SQLite database:
+The system has two cooperating processes sharing a PostgreSQL database:
 
-- **Ingest** (one-shot or via API): reads log files, batches rows into SQLite, rebuilds FTS index
-- **Watcher** (started by the server): tails files for new lines, inserts rows incrementally
-- **Server** (Fastify): serves the dashboard page (EJS SSR) and JSON API (read-only queries)
+- **Watcher** (started by the server at boot): backfills existing log files in 4 MB chunks, then tails for new lines; inserts rows via postgres bulk insert; updates `ingestion_log.file_size` offset to prevent duplicates on restart
+- **Server** (Fastify): calls `initDb()`, starts the watcher, serves the dashboard page (EJS SSR) and JSON API
 
-The browser is a single-page app with three tabs (Dashboard, Charts, Logs). No frontend framework — vanilla JS + Chart.js.
+An optional **Ingest** CLI (`yarn ingest`) does a full synchronous re-parse of all files — useful for historical data or forced re-ingestion.
+
+The browser is a single-page app with three tabs (Dashboard, Charts, Logs). Vanilla JS + Chart.js, no frontend framework.
 
 ---
 
 ## Log Format
 
-→ See [wiki/log-format.md](.agent/wiki/log-format.md)
+→ See [wiki/log-format.md](./wiki/log-format.md)
 
 Every line must start with a timestamp:
 ```
@@ -63,32 +66,32 @@ Continuation lines (stack traces) are appended to the parent entry.
 
 ## Database
 
-→ See [wiki/database-schema.md](.agent/wiki/database-schema.md)
+→ See [wiki/database-schema.md](./wiki/database-schema.md)
 
-Two tables: `logs` (all entries) and `ingestion_log` (file tracking). One FTS5 virtual table for full-text search on log messages.
+PostgreSQL with two tables: `logs` (partitioned by month on `timestamp_unix`) and `ingestion_log` (file offset tracking). Full-text search via a `message_tsv TSVECTOR GENERATED ALWAYS AS` column with a GIN index.
 
 ---
 
 ## API
 
-→ See [wiki/api-reference.md](.agent/wiki/api-reference.md)
+→ See [wiki/api-reference.md](./wiki/api-reference.md)
 
 Key endpoints:
-- `GET /api/logs` — paginated log search with FTS and filters
+- `GET /api/logs` — paginated log search with full-text search (`plainto_tsquery`) and filters
 - `GET /api/stats/*` — aggregated stats (levels, timeline, HTTP status, top URLs)
-- `POST /api/ingest` — trigger ingestion from the dashboard (button in the topbar)
+- `POST /api/ingest` — trigger re-ingestion from the dashboard (button in the topbar)
 - `GET /api/files/download` — download a raw log file
 
 ---
 
 ## Development
 
-→ See [wiki/development.md](.agent/wiki/development.md)
+→ See [wiki/development.md](./wiki/development.md)
 
 ```bash
-npm install
-npm run ingest   # parse logs/ into SQLite
-npm run dev      # hot-reload dev server at http://localhost:3000
+corepack enable      # activate Yarn v4
+yarn install
+yarn dev             # hot-reload dev server at http://localhost:3000
 ```
 
 Key scripts: `build`, `start`, `dev`, `lint`, `format`, `ingest`, `ingest:force`, `ingest:check`
@@ -97,8 +100,8 @@ Key scripts: `build`, `start`, `dev`, `lint`, `format`, `ingest`, `ingest:force`
 
 ## Requirements
 
-- Node.js 22.5+ (uses `node:sqlite` built-in module — no native addons required)
-- Or Docker (no Node.js needed on the host)
+- Node.js 22.5+, Yarn 4 (corepack-managed), PostgreSQL 14+
+- Or Docker (no local dependencies needed)
 
 ---
 

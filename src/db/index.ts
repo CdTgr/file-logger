@@ -1,33 +1,11 @@
-import { DatabaseSync } from 'node:sqlite'
+import postgres from 'postgres'
 
-import fs from 'fs'
+const url =
+  process.env.DATABASE_URL ||
+  `postgres://${process.env.POSTGRES_USER || 'logger'}:${process.env.POSTGRES_PASSWORD || 'logger'}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'logger'}`
 
-let db: DatabaseSync | null = null
-let dbPath = ''
-
-export function configureDb(path: string): void {
-  dbPath = path
-}
-
-export function getDb(): DatabaseSync | null {
-  if (db) return db
-  const p = dbPath || process.env.DB_PATH || 'logs.db'
-  if (!fs.existsSync(p)) return null
-  db = new DatabaseSync(p)
-  db.exec(
-    'PRAGMA journal_mode = WAL; PRAGMA cache_size = -32000; PRAGMA query_only = TRUE;',
-  )
-
-  return db
-}
-
-export function resetDb(): void {
-  if (db) {
-    try {
-      db.close()
-    } catch {
-      // ignore close errors
-    }
-    db = null
-  }
-}
+export const sql = postgres(url, {
+  max: 10,
+  idle_timeout: 30,
+  connect_timeout: 10,
+})

@@ -3,22 +3,16 @@ import fs from 'fs'
 import path from 'path'
 
 import { ApiConfig } from '../custom-types/index.js'
-import { dbOrReject } from './utils.js'
+import { sql } from '../db/index.js'
 
 export async function filesRoutes(
   fastify: FastifyInstance,
   opts: ApiConfig,
 ): Promise<void> {
   fastify.get('/api/files', async (_req, reply) => {
-    const d = dbOrReject(reply)
-
-    if (!d) {
-      return
-    }
-
-    const rows = d
-      .prepare('SELECT DISTINCT log_file FROM logs ORDER BY log_file')
-      .all() as { log_file: string }[]
+    const rows = await sql<{ log_file: string }[]>`
+      SELECT DISTINCT log_file FROM logs ORDER BY log_file
+    `
 
     return reply.send(rows.map((r) => r.log_file))
   })

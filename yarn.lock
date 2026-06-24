@@ -1311,6 +1311,7 @@ __metadata:
     eslint-plugin-simple-import-sort: "npm:^13.0.0"
     eslint-plugin-unused-imports: "npm:^4.4.1"
     fastify: "npm:^5.8.5"
+    postgres: "npm:^3.4.9"
     prettier: "npm:^3.4.2"
     tsx: "npm:^4.19.2"
     typescript: "npm:^5.7.2"
@@ -1844,6 +1845,13 @@ __metadata:
   bin:
     pino: bin.js
   checksum: 10c0/ae1c57f2baac85dd5d63a3500746d5ea1cfc4bfcbf356eaec94d42a782eeb80caa4d4614de43a036cf48e2aed46d855a7ff21b126f55a63811def52a894ef937
+  languageName: node
+  linkType: hard
+
+"postgres@npm:^3.4.9":
+  version: 3.4.9
+  resolution: "postgres@npm:3.4.9"
+  checksum: 10c0/b767dd2258df0f6523ce1ec0bce0a87e93c6fb961c97be0059f8ea2bc4c57c6057689258361a0988f0bb61d636483d35f0c591620566218f7083c78ab7955862
   languageName: node
   linkType: hard
 
