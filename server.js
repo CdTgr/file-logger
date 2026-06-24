@@ -186,7 +186,7 @@ app.get('/api/stats/http-status', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Log dashboard → http://localhost:${PORT}`);
+  console.log(`File Logger → http://localhost:${PORT}`);
   if (!fs.existsSync(DB_PATH)) {
     console.log('  No database found — run `npm run ingest` first.');
     return;

@@ -1,5 +1,5 @@
 services:
-  log-dashboard:
+  file-logger:
     build: .
     ports:
       - "${PORT:-3000}:3000"

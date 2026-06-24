@@ -1,7 +1,7 @@
 {
-  "name": "log-dashboard",
+  "name": "file-logger",
   "version": "1.0.0",
-  "description": "Log viewer and dashboard for structured logs",
+  "description": "File Logger — live log ingestion, search, and visualization dashboard",
   "scripts": {
     "ingest": "node ingest.js",
     "start": "node server.js",
