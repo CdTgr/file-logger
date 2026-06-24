@@ -24,11 +24,11 @@ const props = defineProps<{ data: HttpStatusStat[]; loading?: boolean }>()
 const $q = useQuasar()
 
 const COLORS: Record<string, string> = {
-  '1xx': '#aaaaaa',
-  '2xx': '#21BA45',
-  '3xx': '#31CCEC',
-  '4xx': '#F2C037',
-  '5xx': '#ff4d63',
+  '1xx': '#8E8E93',
+  '2xx': '#30D158',
+  '3xx': '#64D2FF',
+  '4xx': '#FFD60A',
+  '5xx': '#FF453A',
 }
 
 const series = computed(() => props.data.map((r) => r.count))

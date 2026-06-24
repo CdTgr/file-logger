@@ -1,85 +1,232 @@
 @import 'quasar.variables';
 
-/* ── Header ── */
+/* ── Font ── */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue',
+    'Segoe UI', system-ui, sans-serif;
+  transition: background 0.4s ease;
+}
+
+/* ── Gradient mesh background ── */
+body.body--dark {
+  background:
+    radial-gradient(ellipse at 12% 8%, rgba(94, 41, 159, 0.30) 0%, transparent 42%),
+    radial-gradient(ellipse at 88% 92%, rgba(10, 132, 255, 0.22) 0%, transparent 42%),
+    radial-gradient(ellipse at 60% 40%, rgba(191, 90, 242, 0.08) 0%, transparent 55%),
+    #08080f;
+  min-height: 100vh;
+}
+
+body.body--light {
+  background:
+    radial-gradient(ellipse at 12% 8%, rgba(191, 90, 242, 0.12) 0%, transparent 42%),
+    radial-gradient(ellipse at 88% 92%, rgba(10, 132, 255, 0.14) 0%, transparent 42%),
+    radial-gradient(ellipse at 60% 40%, rgba(48, 209, 88, 0.05) 0%, transparent 55%),
+    #f2f2f7;
+  min-height: 100vh;
+}
+
+/* ── Transparent layout layers (let the gradient show through) ── */
+.q-layout__section--marginal,
+.q-page-container,
+.q-page,
+.q-tab-panels,
+.q-tab-panel {
+  background: transparent !important;
+}
+
+/* ── Header — frosted glass bar ── */
 .app-header {
   box-shadow: none;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  background: #ffffff;
+  backdrop-filter: blur(48px) saturate(200%) brightness(1.02);
+  -webkit-backdrop-filter: blur(48px) saturate(200%) brightness(1.02);
+  background: rgba(242, 242, 247, 0.78) !important;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.7);
   color: rgba(0, 0, 0, 0.87);
+  transition: background 0.4s ease, border-color 0.4s ease;
 }
 
 .body--dark .app-header {
+  background: rgba(8, 8, 15, 0.76) !important;
   border-bottom-color: rgba(255, 255, 255, 0.08);
-  background: #1d1d1d;
   color: #ffffff;
 }
 
 .app-header-tabs {
-  background: transparent;
+  background: transparent !important;
+}
+
+/* ── Glass cards ── */
+.q-card {
+  border-radius: 18px !important;
+  backdrop-filter: blur(32px) saturate(180%) brightness(1.04);
+  -webkit-backdrop-filter: blur(32px) saturate(180%) brightness(1.04);
+  background: rgba(255, 255, 255, 0.60) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.85) !important;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.05),
+    0 8px 28px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+  transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.body--dark .q-card {
+  background: rgba(28, 28, 38, 0.55) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    0 8px 28px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09) !important;
+}
+
+.q-card .q-separator {
+  opacity: 0.12;
+}
+
+/* ── Table container ── */
+.q-table__container {
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.45) !important;
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 0.5px solid rgba(255, 255, 255, 0.7);
+}
+
+.body--dark .q-table__container {
+  background: rgba(20, 20, 28, 0.50) !important;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.q-table {
+  background: transparent !important;
+}
+
+/* ── Inputs (more rounded) ── */
+.q-field--outlined .q-field__control {
+  border-radius: 12px !important;
+}
+
+.q-field--outlined .q-field__control::before {
+  border-radius: 12px !important;
+}
+
+/* ── Buttons (pill-ish) ── */
+.q-btn:not(.q-btn--round) {
+  border-radius: 10px;
+}
+
+/* ── Dropdown menus ── */
+.q-menu {
+  border-radius: 14px !important;
+  backdrop-filter: blur(36px) saturate(180%);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  background: rgba(248, 248, 252, 0.92) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.75) !important;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.10),
+    0 12px 40px rgba(0, 0, 0, 0.08) !important;
+}
+
+.body--dark .q-menu {
+  background: rgba(28, 28, 38, 0.92) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.45),
+    0 12px 40px rgba(0, 0, 0, 0.38) !important;
+}
+
+/* ── Date picker ── */
+.q-date {
+  border-radius: 18px !important;
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  background: rgba(248, 248, 252, 0.94) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+.body--dark .q-date {
+  background: rgba(28, 28, 38, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* ── Dialog backdrop blur ── */
+.q-dialog__backdrop {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
+.body--light .q-dialog__backdrop {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* ── Notifications ── */
+.q-notification {
+  border-radius: 14px !important;
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
 }
 
 /* ── Level badges ── */
 .lvl {
   font-size: 11px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
   text-transform: uppercase;
-  font-family: monospace;
+  font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+  letter-spacing: 0.03em;
 }
 
 .lvl-INFO {
-  background: rgba(33, 186, 69, 0.15);
-  color: #21ba45;
+  background: rgba(48, 209, 88, 0.15);
+  color: #30d158;
 }
 
 .lvl-DEBUG {
-  background: rgba(49, 204, 236, 0.15);
-  color: #31ccec;
+  background: rgba(100, 210, 255, 0.15);
+  color: #64d2ff;
 }
 
 .lvl-WARN {
-  background: rgba(242, 192, 55, 0.15);
-  color: #f2c037;
+  background: rgba(255, 214, 10, 0.15);
+  color: #ffd60a;
 }
 
 .lvl-ERROR {
-  background: rgba(193, 0, 21, 0.2);
-  color: #ff4d63;
+  background: rgba(255, 69, 58, 0.15);
+  color: #ff453a;
 }
 
 .lvl-FATAL {
-  background: rgba(156, 39, 176, 0.2);
-  color: #ce93d8;
+  background: rgba(191, 90, 242, 0.18);
+  color: #bf5af2;
 }
 
 .lvl-TRACE {
-  background: rgba(255, 255, 255, 0.07);
-  color: #aaa;
+  background: rgba(255, 255, 255, 0.08);
+  color: #8e8e93;
 }
 
 .body--light .lvl-TRACE {
   background: rgba(0, 0, 0, 0.06);
-  color: #888;
+  color: #6c6c70;
 }
 
 /* ── Monospace cells ── */
 .mono {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
 }
 
 .q-table__top {
   padding: 8px 16px;
-}
-
-/* ── Page loading overlay ── */
-.page-loading {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(29, 29, 29, 0.85);
-  z-index: 9999;
 }

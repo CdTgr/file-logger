@@ -108,7 +108,7 @@
       <template #body-cell-status_code="{ value }">
         <q-td
           :style="
-            value >= 500 ? 'color:#ff4d63' : value >= 400 ? 'color:#F2C037' : ''
+            value >= 500 ? 'color:#FF453A' : value >= 400 ? 'color:#FFD60A' : ''
           "
         >
           {{ value ?? '' }}
@@ -117,7 +117,7 @@
       <template #body-cell-response_time="{ value }">
         <q-td
           :style="
-            value > 5000 ? 'color:#ff4d63' : value > 1000 ? 'color:#F2C037' : ''
+            value > 5000 ? 'color:#FF453A' : value > 1000 ? 'color:#FFD60A' : ''
           "
         >
           {{ value != null ? value.toFixed(0) + 'ms' : '–' }}

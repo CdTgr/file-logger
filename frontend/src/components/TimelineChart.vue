@@ -32,13 +32,13 @@ const $q = useQuasar()
 const stableKey = computed(() => props.labels.slice(0, 3).join(','))
 
 const LEVEL_COLORS: Record<string, string> = {
-  INFO: '#21BA45',
-  DEBUG: '#31CCEC',
-  WARN: '#F2C037',
-  ERROR: '#ff4d63',
-  FATAL: '#ce93d8',
-  TRACE: '#aaaaaa',
-  Logs: '#ff33d6',
+  INFO: '#30D158',
+  DEBUG: '#64D2FF',
+  WARN: '#FFD60A',
+  ERROR: '#FF453A',
+  FATAL: '#BF5AF2',
+  TRACE: '#8E8E93',
+  Logs: '#0A84FF',
 }
 
 const chartOptions = computed(() => {

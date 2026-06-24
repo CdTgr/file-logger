@@ -24,12 +24,12 @@ const props = defineProps<{ levels: LevelCount[]; loading?: boolean }>()
 const $q = useQuasar()
 
 const COLORS: Record<string, string> = {
-  INFO: '#21BA45',
-  DEBUG: '#31CCEC',
-  WARN: '#F2C037',
-  ERROR: '#ff4d63',
-  FATAL: '#ce93d8',
-  TRACE: '#aaaaaa',
+  INFO: '#30D158',
+  DEBUG: '#64D2FF',
+  WARN: '#FFD60A',
+  ERROR: '#FF453A',
+  FATAL: '#BF5AF2',
+  TRACE: '#8E8E93',
 }
 
 const series = computed(() => props.levels.map((l) => l.count))
