@@ -10,6 +10,8 @@ const SETTLE_MS = 300
 const FLUSH_MS = 5000
 const POLL_MS = parseInt(process.env.POLL_MS ?? '5000', 10)
 const CHUNK_SIZE = 4 * 1024 * 1024 // 4 MB per read chunk
+// 13 insert columns × rows = pg parameters; hard limit is 65,534
+const MAX_ROWS_PER_INSERT = 5000
 
 const PINO_LEVELS: Record<number, string> = {
   10: 'TRACE',
@@ -344,9 +346,12 @@ class LogWatcher {
       req_id: r.req_id,
     }))
 
-    await sql`
-      INSERT INTO logs ${sql(insertData, 'log_file', 'timestamp', 'timestamp_unix', 'level', 'level_num', 'message', 'method', 'url', 'status_code', 'response_time', 'pid', 'hostname', 'req_id')}
-    `
+    for (let i = 0; i < insertData.length; i += MAX_ROWS_PER_INSERT) {
+      const chunk = insertData.slice(i, i + MAX_ROWS_PER_INSERT)
+      await sql`
+        INSERT INTO logs ${sql(chunk, 'log_file', 'timestamp', 'timestamp_unix', 'level', 'level_num', 'message', 'method', 'url', 'status_code', 'response_time', 'pid', 'hostname', 'req_id')}
+      `
+    }
 
     await sql`
       INSERT INTO ingestion_log (log_file, ingested_at, row_count, file_size)
