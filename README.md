@@ -62,23 +62,23 @@ File Logger parses lines in this format, produced by pino and similar loggers:
 
 ## Scripts
 
-| Command | Description |
-|---|---|
-| `npm run ingest` | Parse all files in `logs/` into SQLite. Skips files that haven't changed. |
-| `npm run ingest -- --force` | Re-ingest all files from scratch. |
-| `npm run ingest -- --check` | Show ingestion status without writing anything. |
-| `npm start` | Start the server and file watcher on port 3000. |
-| `npm run watch` | Run the file watcher standalone (separate terminal). |
+| Command                     | Description                                                               |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `npm run ingest`            | Parse all files in `logs/` into SQLite. Skips files that haven't changed. |
+| `npm run ingest -- --force` | Re-ingest all files from scratch.                                         |
+| `npm run ingest -- --check` | Show ingestion status without writing anything.                           |
+| `npm start`                 | Start the server and file watcher on port 3000.                           |
+| `npm run watch`             | Run the file watcher standalone (separate terminal).                      |
 
 ## Configuration
 
 All options are environment variables:
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3000` | HTTP port |
-| `DB_PATH` | `./logs.db` | Path to the SQLite database file |
-| `POLL_MS` | `5000` | Polling interval for the watcher in ms. Set to `0` to disable (use `fs.watch` only). Useful in Docker where bind-mount events may not propagate. |
+| Variable  | Default     | Description                                                                                                                                      |
+| --------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PORT`    | `3000`      | HTTP port                                                                                                                                        |
+| `DB_PATH` | `./logs.db` | Path to the SQLite database file                                                                                                                 |
+| `POLL_MS` | `5000`      | Polling interval for the watcher in ms. Set to `0` to disable (use `fs.watch` only). Useful in Docker where bind-mount events may not propagate. |
 
 ## Docker Details
 
