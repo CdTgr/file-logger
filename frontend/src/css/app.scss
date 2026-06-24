@@ -27,13 +27,13 @@ body::before {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  /* Shift hue to match $primary #0A84FF; deepen saturation + slightly darken */
-  filter: hue-rotate(8deg) saturate(1.25) brightness(0.82);
+  /* +70° rotates blue waves into purple/violet; blur(15px) softens the image into an ambient glow */
+  filter: hue-rotate(70deg) saturate(1.30) brightness(0.80) blur(15px);
 }
 
-/* Light mode — same image, lightened and partially desaturated for a clean light feel */
+/* Light mode — same purple shift, just slightly lighter; keep saturation so glass has color to blur */
 body.body--light::before {
-  filter: hue-rotate(8deg) saturate(0.65) brightness(1.55);
+  filter: hue-rotate(70deg) saturate(1.05) brightness(1.15) blur(15px);
 }
 
 /* ── Transparent layout layers ── */
@@ -50,17 +50,17 @@ body.body--light::before {
 /* ── Header — frosted glass ── */
 .app-header {
   box-shadow: none !important;
-  backdrop-filter: blur(48px) saturate(200%) brightness(1.02);
-  -webkit-backdrop-filter: blur(48px) saturate(200%) brightness(1.02);
-  background: rgba(232, 234, 242, 0.72) !important;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.65);
-  color: rgba(0, 0, 0, 0.87);
+  backdrop-filter: blur(52px) saturate(180%) brightness(1.12);
+  -webkit-backdrop-filter: blur(52px) saturate(180%) brightness(1.12);
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.45);
+  color: rgba(0, 0, 0, 0.88);
   transition: background 0.4s ease, border-color 0.4s ease;
 }
 
 .body--dark .app-header {
   background: rgba(2, 8, 24, 0.75) !important;
-  border-bottom-color: rgba(80, 160, 255, 0.14);
+  border-bottom-color: rgba(160, 100, 255, 0.14);
   color: #ffffff;
 }
 
@@ -92,7 +92,7 @@ body.body--light::before {
 }
 
 .body--light .q-tab--active {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.28);
 }
 
 /* ── Buttons — no shadow, no ripple residue ── */
@@ -114,22 +114,22 @@ body.body--light::before {
 /* ── Glass cards ── */
 .q-card {
   border-radius: 18px !important;
-  backdrop-filter: blur(36px) saturate(200%) brightness(1.06);
-  -webkit-backdrop-filter: blur(36px) saturate(200%) brightness(1.06);
-  background: rgba(255, 255, 255, 0.52) !important;
-  border: 0.5px solid rgba(255, 255, 255, 0.80) !important;
+  backdrop-filter: blur(48px) saturate(180%) brightness(1.14);
+  -webkit-backdrop-filter: blur(48px) saturate(180%) brightness(1.14);
+  background: rgba(255, 255, 255, 0.18) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.55) !important;
   box-shadow:
-    0 1px 1px rgba(255, 255, 255, 0.60) inset,
-    0 4px 16px rgba(0, 0, 0, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    0 1px 0 rgba(255, 255, 255, 0.70) inset,
+    0 4px 24px rgba(80, 0, 120, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.08) !important;
   transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 .body--dark .q-card {
   background: rgba(4, 14, 38, 0.42) !important;
-  border-color: rgba(80, 160, 255, 0.18) !important;
+  border-color: rgba(160, 100, 255, 0.18) !important;
   box-shadow:
-    0 1px 0 rgba(100, 180, 255, 0.10) inset,
+    0 1px 0 rgba(180, 130, 255, 0.10) inset,
     0 8px 32px rgba(0, 10, 40, 0.65),
     0 1px 4px rgba(0, 0, 0, 0.40) !important;
 }
@@ -142,16 +142,16 @@ body.body--light::before {
 .q-table__container {
   border-radius: 16px !important;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.40) !important;
-  backdrop-filter: blur(28px) saturate(180%) brightness(1.04);
-  -webkit-backdrop-filter: blur(28px) saturate(180%) brightness(1.04);
-  border: 0.5px solid rgba(255, 255, 255, 0.65) !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  backdrop-filter: blur(40px) saturate(180%) brightness(1.12);
+  -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(1.12);
+  border: 0.5px solid rgba(255, 255, 255, 0.45) !important;
   box-shadow: none !important;
 }
 
 .body--dark .q-table__container {
   background: rgba(3, 12, 34, 0.42) !important;
-  border-color: rgba(80, 160, 255, 0.12) !important;
+  border-color: rgba(160, 100, 255, 0.12) !important;
 }
 
 .q-table {
@@ -196,7 +196,7 @@ body.body--light::before {
 
 .body--dark .q-menu {
   background: rgba(4, 14, 40, 0.92) !important;
-  border-color: rgba(80, 160, 255, 0.14) !important;
+  border-color: rgba(160, 100, 255, 0.14) !important;
   box-shadow:
     0 8px 32px rgba(0, 10, 50, 0.65),
     0 2px 8px rgba(0, 0, 0, 0.40) !important;
@@ -214,7 +214,7 @@ body.body--light::before {
 
 .body--dark .q-date {
   background: rgba(4, 14, 40, 0.92) !important;
-  border-color: rgba(80, 160, 255, 0.14) !important;
+  border-color: rgba(160, 100, 255, 0.14) !important;
   box-shadow: 0 12px 48px rgba(0, 10, 50, 0.70) !important;
 }
 
@@ -266,6 +266,13 @@ body.body--light::before {
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ── FAB ── */
+.q-fab__main-btn {
+  box-shadow:
+    0 4px 24px rgba(10, 132, 255, 0.45),
+    0 1px 4px rgba(0, 0, 0, 0.30) !important;
 }
 
 /* ── Level badges ── */

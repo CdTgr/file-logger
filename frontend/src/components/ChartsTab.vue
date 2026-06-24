@@ -1,64 +1,5 @@
 <template>
   <div>
-    <div class="row items-center q-gutter-sm q-mb-md">
-      <q-input
-        v-model="from"
-        outlined
-        label="From"
-        style="width: 160px"
-        readonly
-      >
-        <template #append>
-          <q-icon name="sym_o_event" class="cursor-pointer">
-            <q-popup-proxy
-              cover
-              transition-show="scale"
-              transition-hide="scale"
-            >
-              <q-date v-model="from" mask="YYYY-MM-DD">
-                <div class="row items-center justify-end">
-                  <q-btn
-                    v-close-popup
-                    label="Close"
-                    color="primary"
-                    flat
-                    no-caps
-                  />
-                </div>
-              </q-date>
-            </q-popup-proxy>
-          </q-icon>
-        </template>
-      </q-input>
-
-      <q-input v-model="to" outlined label="To" style="width: 160px" readonly>
-        <template #append>
-          <q-icon name="sym_o_event" class="cursor-pointer">
-            <q-popup-proxy
-              cover
-              transition-show="scale"
-              transition-hide="scale"
-            >
-              <q-date v-model="to" mask="YYYY-MM-DD">
-                <div class="row items-center justify-end">
-                  <q-btn
-                    v-close-popup
-                    label="Close"
-                    color="primary"
-                    flat
-                    no-caps
-                  />
-                </div>
-              </q-date>
-            </q-popup-proxy>
-          </q-icon>
-        </template>
-      </q-input>
-
-      <q-btn label="Apply" color="primary" no-caps @click="loadAll" />
-      <q-btn label="Reset" flat no-caps @click="reset" />
-    </div>
-
     <div class="row q-col-gutter-md">
       <div class="col-12 col-md-5">
         <q-card bordered>
@@ -94,7 +35,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, watch } from 'vue'
+import { ref } from 'vue'
 
 import { api } from '../api'
 import type { HttpStatusStat, UrlStat } from '../api/types'
@@ -102,12 +44,6 @@ import { useAppStore } from '../stores/appStore'
 import HttpStatusChart from './HttpStatusChart.vue'
 
 const store = useAppStore()
-const today = new Date().toISOString().slice(0, 10)
-const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000)
-  .toISOString()
-  .slice(0, 10)
-const from = ref(thirtyDaysAgo)
-const to = ref(today)
 const httpStatus = ref<HttpStatusStat[]>([])
 const urlRows = ref<UrlStat[]>([])
 const loadingHttp = ref(false)
@@ -136,8 +72,8 @@ const urlCols = [
 function filters() {
   return {
     file: store.selectedFile || undefined,
-    from: from.value || undefined,
-    to: to.value || undefined,
+    from: store.filterFrom || undefined,
+    to: store.filterTo || undefined,
   }
 }
 
@@ -158,14 +94,8 @@ async function loadAll() {
   }
 }
 
-function reset() {
-  from.value = thirtyDaysAgo
-  to.value = today
-  void loadAll()
-}
-
 watch(
-  () => store.selectedFile,
+  () => [store.selectedFile, store.filterFrom, store.filterTo],
   () => loadAll(),
 )
 onMounted(() => loadAll())

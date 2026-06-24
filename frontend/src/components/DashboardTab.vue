@@ -1,82 +1,5 @@
 <template>
   <div>
-    <div class="row items-center q-gutter-sm q-mb-md">
-      <q-input
-        v-model="from"
-        outlined
-        label="From"
-        style="width: 160px"
-        readonly
-      >
-        <template #append>
-          <q-icon name="sym_o_event" class="cursor-pointer">
-            <q-popup-proxy
-              cover
-              transition-show="scale"
-              transition-hide="scale"
-            >
-              <q-date
-                v-model="from"
-                mask="YYYY-MM-DD"
-                @update:model-value="closeProxy"
-              >
-                <div class="row items-center justify-end">
-                  <q-btn
-                    v-close-popup
-                    label="Close"
-                    color="primary"
-                    flat
-                    no-caps
-                  />
-                </div>
-              </q-date>
-            </q-popup-proxy>
-          </q-icon>
-        </template>
-      </q-input>
-
-      <q-input v-model="to" outlined label="To" style="width: 160px" readonly>
-        <template #append>
-          <q-icon name="sym_o_event" class="cursor-pointer">
-            <q-popup-proxy
-              cover
-              transition-show="scale"
-              transition-hide="scale"
-            >
-              <q-date
-                v-model="to"
-                mask="YYYY-MM-DD"
-                @update:model-value="closeProxy"
-              >
-                <div class="row items-center justify-end">
-                  <q-btn
-                    v-close-popup
-                    label="Close"
-                    color="primary"
-                    flat
-                    no-caps
-                  />
-                </div>
-              </q-date>
-            </q-popup-proxy>
-          </q-icon>
-        </template>
-      </q-input>
-
-      <q-select
-        v-model="level"
-        :options="levelOptions"
-        outlined
-        label="Level"
-        style="width: 140px"
-        emit-value
-        map-options
-      />
-
-      <q-btn label="Apply" color="primary" no-caps @click="loadAll" />
-      <q-btn label="Reset" flat no-caps @click="reset" />
-    </div>
-
     <div class="row q-gutter-md q-mb-lg">
       <q-card bordered class="col" style="min-width: 130px">
         <q-card-section>
@@ -166,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 
 import { api } from '../api'
 import type {
@@ -178,32 +101,13 @@ import type {
 import { useAppStore } from '../stores/appStore'
 import LevelChart from './LevelChart.vue'
 import TimelineChart from './TimelineChart.vue'
+import { ref } from 'vue'
 
 const store = useAppStore()
 
-const today = new Date().toISOString().slice(0, 10)
-const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000)
-  .toISOString()
-  .slice(0, 10)
-const from = ref(thirtyDaysAgo)
-const to = ref(today)
-const level = ref('ALL')
 const interval = ref('day')
 const stacked = ref(false)
 const chartType = ref<'bar' | 'area'>('bar')
-
-const levelOptions = [
-  'ALL',
-  'TRACE',
-  'DEBUG',
-  'INFO',
-  'WARN',
-  'ERROR',
-  'FATAL',
-].map((l) => ({
-  label: l,
-  value: l,
-}))
 
 const summary = ref<SummaryStats>({ total: 0, earliest: null, latest: null })
 const levels = ref<LevelCount[]>([])
@@ -231,16 +135,12 @@ function fmtTs(iso: string | null) {
   })
 }
 
-function closeProxy() {
-  // q-popup-proxy closes automatically on date selection via v-close-popup on inner btn
-}
-
 function filters() {
   return {
     file: store.selectedFile || undefined,
-    from: from.value || undefined,
-    to: to.value || undefined,
-    level: level.value !== 'ALL' ? level.value : undefined,
+    from: store.filterFrom || undefined,
+    to: store.filterTo || undefined,
+    level: store.filterLevel !== 'ALL' ? store.filterLevel : undefined,
   }
 }
 
@@ -298,15 +198,13 @@ async function loadAll() {
   await Promise.all([loadSummary(), loadLevels(), loadTimeline()])
 }
 
-function reset() {
-  from.value = thirtyDaysAgo
-  to.value = today
-  level.value = 'ALL'
-  void loadAll()
-}
-
 watch(
-  () => store.selectedFile,
+  () => [
+    store.selectedFile,
+    store.filterFrom,
+    store.filterTo,
+    store.filterLevel,
+  ],
   () => loadAll(),
 )
 onMounted(() => loadAll())

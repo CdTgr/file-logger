@@ -1,86 +1,5 @@
 <template>
   <div>
-    <div class="row items-center q-gutter-sm q-mb-md">
-      <q-input
-        v-model="search"
-        outlined
-        placeholder="Search…"
-        clearable
-        style="width: 240px"
-        @keyup.enter="load(1)"
-        @clear="load(1)"
-      >
-        <template #append><q-icon name="sym_o_search" /></template>
-      </q-input>
-
-      <q-input
-        v-model="from"
-        outlined
-        label="From"
-        style="width: 160px"
-        readonly
-      >
-        <template #append>
-          <q-icon name="sym_o_event" class="cursor-pointer">
-            <q-popup-proxy
-              cover
-              transition-show="scale"
-              transition-hide="scale"
-            >
-              <q-date v-model="from" mask="YYYY-MM-DD">
-                <div class="row items-center justify-end">
-                  <q-btn
-                    v-close-popup
-                    label="Close"
-                    color="primary"
-                    flat
-                    no-caps
-                  />
-                </div>
-              </q-date>
-            </q-popup-proxy>
-          </q-icon>
-        </template>
-      </q-input>
-
-      <q-input v-model="to" outlined label="To" style="width: 160px" readonly>
-        <template #append>
-          <q-icon name="sym_o_event" class="cursor-pointer">
-            <q-popup-proxy
-              cover
-              transition-show="scale"
-              transition-hide="scale"
-            >
-              <q-date v-model="to" mask="YYYY-MM-DD">
-                <div class="row items-center justify-end">
-                  <q-btn
-                    v-close-popup
-                    label="Close"
-                    color="primary"
-                    flat
-                    no-caps
-                  />
-                </div>
-              </q-date>
-            </q-popup-proxy>
-          </q-icon>
-        </template>
-      </q-input>
-
-      <q-select
-        v-model="level"
-        :options="levelOpts"
-        outlined
-        label="Level"
-        emit-value
-        map-options
-        style="width: 130px"
-      />
-
-      <q-btn label="Search" color="primary" no-caps @click="load(1)" />
-      <q-btn label="Reset" flat no-caps @click="reset" />
-    </div>
-
     <div v-if="loading" class="row justify-center q-pa-xl">
       <q-spinner size="48px" color="primary" />
     </div>
@@ -142,16 +61,6 @@ import LogDetailModal from './LogDetailModal.vue'
 
 const store = useAppStore()
 
-const today = new Date().toISOString().slice(0, 10)
-const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000)
-  .toISOString()
-  .slice(0, 10)
-
-const search = ref('')
-const from = ref(thirtyDaysAgo)
-const to = ref(today)
-const level = ref('ALL')
-const total = ref(0)
 const rows = ref<LogRow[]>([])
 const loading = ref(false)
 const detailOpen = ref(false)
@@ -162,19 +71,6 @@ const tablePagination = ref({
   rowsPerPage: 200,
   rowsNumber: 0,
 })
-
-const levelOpts = [
-  'ALL',
-  'TRACE',
-  'DEBUG',
-  'INFO',
-  'WARN',
-  'ERROR',
-  'FATAL',
-].map((l) => ({
-  label: l,
-  value: l,
-}))
 
 function fmtTs(iso: string) {
   return iso
@@ -247,15 +143,14 @@ async function load(
   try {
     const data = await api.logs({
       file: store.selectedFile || undefined,
-      from: from.value || undefined,
-      to: to.value || undefined,
-      level: level.value !== 'ALL' ? level.value : undefined,
-      q: search.value || undefined,
+      from: store.filterFrom || undefined,
+      to: store.filterTo || undefined,
+      level: store.filterLevel !== 'ALL' ? store.filterLevel : undefined,
+      q: store.filterSearch || undefined,
       page: p,
       limit: perPage,
     })
     rows.value = data.rows
-    total.value = data.total
     tablePagination.value = {
       page: p,
       rowsPerPage: perPage,
@@ -273,21 +168,19 @@ function onRequest(props: {
   void load(props.pagination.page, props.pagination.rowsPerPage)
 }
 
-function reset() {
-  search.value = ''
-  from.value = thirtyDaysAgo
-  to.value = today
-  level.value = 'ALL'
-  void load(1)
-}
-
 function openDetail(row: LogRow) {
   detailRow.value = row
   detailOpen.value = true
 }
 
 watch(
-  () => store.selectedFile,
+  () => [
+    store.selectedFile,
+    store.filterFrom,
+    store.filterTo,
+    store.filterLevel,
+    store.filterSearch,
+  ],
   () => load(1),
 )
 onMounted(() => load(1))
