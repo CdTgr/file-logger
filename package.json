@@ -1,6 +1,6 @@
 {
   "name": "file-logger",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "File Logger — live log ingestion, search, and visualization dashboard",
   "scripts": {
     "ingest": "node ingest.js",
