@@ -10,6 +10,7 @@ export interface WatcherConfig {
 export interface FileState {
   offset: number
   pending: LogRow | null
+  isReading: boolean
   debounceTimer?: ReturnType<typeof setTimeout>
   flushTimer?: ReturnType<typeof setTimeout>
 }

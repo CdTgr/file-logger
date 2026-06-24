@@ -31,7 +31,4 @@ ENV DB_PATH=/app/data/logs.db \
 
 EXPOSE 3000
 
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["node", "dist/server.js"]

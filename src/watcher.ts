@@ -4,10 +4,12 @@ import fs from 'fs'
 import path from 'path'
 
 import { FileState, LogRow, WatcherConfig } from './custom-types/index.js'
+import { initDb } from './db/schema.js'
 
 const SETTLE_MS = 300
 const FLUSH_MS = 5000
 const POLL_MS = parseInt(process.env.POLL_MS ?? '5000', 10)
+const CHUNK_SIZE = 4 * 1024 * 1024 // 4 MB per read chunk
 
 const PINO_LEVELS: Record<number, string> = {
   10: 'TRACE',
@@ -113,7 +115,7 @@ class LogWatcher {
   constructor(config: WatcherConfig) {
     this.logsDir = config.logsDir
     this.db = new DatabaseSync(config.dbPath)
-    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;')
+    initDb(this.db)
     this.insert = this.db.prepare(`
       INSERT INTO logs
         (log_file, timestamp, timestamp_unix, level, level_num, message,
@@ -125,14 +127,16 @@ class LogWatcher {
   }
 
   start(): void {
+    // Resume from last known offset for each file so restarts never duplicate rows
     const ingested = this.db
       .prepare('SELECT log_file, file_size FROM ingestion_log')
-      .all() as {
-      log_file: string
-      file_size: number
-    }[]
+      .all() as { log_file: string; file_size: number }[]
     for (const r of ingested) {
-      this.state.set(r.log_file, { offset: Number(r.file_size), pending: null })
+      this.state.set(r.log_file, {
+        offset: Number(r.file_size),
+        pending: null,
+        isReading: false,
+      })
     }
 
     const existing = findLogFiles(this.logsDir)
@@ -169,12 +173,15 @@ class LogWatcher {
       this._pollTimer.unref()
     }
 
-    const count = existing.filter(
-      (f) => fs.statSync(path.join(this.logsDir, f)).size > 0,
+    const newFiles = existing.filter((f) => !this.state.has(f))
+    const watchedFiles = existing.filter(
+      (f) =>
+        fs.existsSync(path.join(this.logsDir, f)) &&
+        fs.statSync(path.join(this.logsDir, f)).size > 0,
     ).length
     const pollNote = POLL_MS > 0 ? ` + polling every ${POLL_MS / 1000}s` : ''
     console.log(
-      `[watcher] Watching ${count} log file(s) for changes (fs.watch${pollNote})`,
+      `[watcher] Watching ${watchedFiles} log file(s)${newFiles.length ? `, backfilling ${newFiles.length} new` : ''} (fs.watch${pollNote})`,
     )
   }
 
@@ -216,9 +223,19 @@ class LogWatcher {
   }
 
   private _scheduleRead(logFile: string): void {
-    const s = this.state.get(logFile) ?? { offset: 0, pending: null }
+    const s = this.state.get(logFile) ?? {
+      offset: 0,
+      pending: null,
+      isReading: false,
+    }
+    // If a chunked backfill is already running, it will catch up naturally
+    if (s.isReading) {
+      this.state.set(logFile, s)
+
+      return
+    }
     clearTimeout(s.debounceTimer)
-    s.debounceTimer = setTimeout(() => this._readNew(logFile), SETTLE_MS)
+    s.debounceTimer = setTimeout(() => this._readChunked(logFile), SETTLE_MS)
     this.state.set(logFile, s)
   }
 
@@ -226,67 +243,106 @@ class LogWatcher {
     const filePath = path.join(this.logsDir, logFile)
     if (!fs.existsSync(filePath)) return
     const { size } = fs.statSync(filePath)
-    const s = this.state.get(logFile) ?? { offset: 0, pending: null }
+    const s = this.state.get(logFile) ?? {
+      offset: 0,
+      pending: null,
+      isReading: false,
+    }
     if (size > s.offset) {
       this.state.set(logFile, s)
-      this._readNew(logFile)
+      this._readChunked(logFile)
     }
   }
 
-  private _readNew(logFile: string): void {
-    const filePath = path.join(this.logsDir, logFile)
-    if (!fs.existsSync(filePath)) return
+  /**
+   * Read new bytes from a file in CHUNK_SIZE increments, yielding the event
+   * loop between chunks via setImmediate. This keeps the server responsive
+   * during large initial backfills without blocking request handling.
+   */
+  private _readChunked(logFile: string): void {
+    const s = this.state.get(logFile)
+    if (!s || s.isReading) return
+    s.isReading = true
 
-    const { size } = fs.statSync(filePath)
-    const s = this.state.get(logFile) ?? { offset: 0, pending: null }
-    if (size <= s.offset) return
+    const processChunk = () => {
+      const filePath = path.join(this.logsDir, logFile)
+      if (!fs.existsSync(filePath)) {
+        s.isReading = false
 
-    const len = size - s.offset
-    const buf = Buffer.alloc(len)
-    const fd = fs.openSync(filePath, 'r')
-    const bytesRead = fs.readSync(fd, buf, 0, len, s.offset)
-    fs.closeSync(fd)
+        return
+      }
 
-    const text = buf.slice(0, bytesRead).toString('utf8')
-    const lastNl = text.lastIndexOf('\n')
-    if (lastNl === -1) return
+      const { size } = fs.statSync(filePath)
+      if (size <= s.offset) {
+        s.isReading = false
 
-    const processable = text.slice(0, lastNl + 1)
-    const newOffset = s.offset + Buffer.byteLength(processable, 'utf8')
+        return
+      }
 
-    const committed: LogRow[] = []
-    for (const line of processable.split('\n')) {
-      if (!line.trim()) continue
-      const m = line.match(TS_RE)
-      if (m) {
-        if (s.pending) committed.push(s.pending)
-        const parsed = parseTimestamp(m[1])
-        s.pending = parsed ? buildRow(logFile, parsed, m[2].trim()) : null
-      } else if (s.pending) {
-        s.pending.message += '\n' + line.trimEnd()
+      const len = Math.min(size - s.offset, CHUNK_SIZE)
+      const buf = Buffer.alloc(len)
+      const fd = fs.openSync(filePath, 'r')
+      const bytesRead = fs.readSync(fd, buf, 0, len, s.offset)
+      fs.closeSync(fd)
+
+      const text = buf.slice(0, bytesRead).toString('utf8')
+      const atEof = s.offset + bytesRead >= size
+
+      // Only process up to the last complete line
+      const lastNl = text.lastIndexOf('\n')
+      if (lastNl === -1) {
+        // No complete line in this chunk; wait for more data
+        s.isReading = false
+
+        return
+      }
+
+      const processable = text.slice(0, lastNl + 1)
+      const chunkBytes = Buffer.byteLength(processable, 'utf8')
+      const newOffset = s.offset + chunkBytes
+
+      const committed: LogRow[] = []
+      for (const line of processable.split('\n')) {
+        if (!line.trim()) continue
+        const m = line.match(TS_RE)
+        if (m) {
+          if (s.pending) committed.push(s.pending)
+          const parsed = parseTimestamp(m[1])
+          s.pending = parsed ? buildRow(logFile, parsed, m[2].trim()) : null
+        } else if (s.pending) {
+          s.pending.message += '\n' + line.trimEnd()
+        }
+      }
+
+      if (committed.length) {
+        this._insertRows(logFile, committed, newOffset)
+        console.log(
+          `[watcher] ${logFile} +${committed.length} entr${committed.length === 1 ? 'y' : 'ies'}`,
+        )
+      }
+
+      s.offset = newOffset
+
+      if (!atEof) {
+        // More data remains — yield the event loop then continue
+        setImmediate(processChunk)
+      } else {
+        s.isReading = false
+        // Schedule flush of any trailing partial line
+        clearTimeout(s.flushTimer)
+        if (s.pending) {
+          s.flushTimer = setTimeout(() => {
+            if (s.pending) {
+              this._insertRows(logFile, [s.pending], s.offset)
+              console.log(`[watcher] ${logFile} +1 entry (flush)`)
+              s.pending = null
+            }
+          }, FLUSH_MS)
+        }
       }
     }
 
-    if (committed.length) {
-      this._insertRows(logFile, committed, newOffset)
-      console.log(
-        `[watcher] ${logFile} +${committed.length} new entr${committed.length === 1 ? 'y' : 'ies'}`,
-      )
-    }
-
-    s.offset = newOffset
-    this.state.set(logFile, s)
-
-    clearTimeout(s.flushTimer)
-    if (s.pending) {
-      s.flushTimer = setTimeout(() => {
-        if (s.pending) {
-          this._insertRows(logFile, [s.pending], s.offset)
-          console.log(`[watcher] ${logFile} +1 entry (flush)`)
-          s.pending = null
-        }
-      }, FLUSH_MS)
-    }
+    processChunk()
   }
 
   private _insertRows(
@@ -349,13 +405,7 @@ class LogWatcher {
   }
 }
 
-export function startWatcher(config: WatcherConfig): LogWatcher | null {
-  const { dbPath } = config
-  if (!fs.existsSync(dbPath)) {
-    console.error('[watcher] No database found — run `npm run ingest` first.')
-
-    return null
-  }
+export function startWatcher(config: WatcherConfig): LogWatcher {
   const w = new LogWatcher(config)
   w.start()
 
@@ -366,7 +416,6 @@ if (require.main === module) {
   const logsDir = process.env.LOGS_DIR || path.join(process.cwd(), 'logs')
   const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'logs.db')
   const watcher = startWatcher({ logsDir, dbPath })
-  if (!watcher) process.exit(1)
   process.on('SIGINT', () => {
     watcher.stop()
     process.exit(0)

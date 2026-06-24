@@ -2,7 +2,6 @@ import fastifyStatic from '@fastify/static'
 import fastifyView from '@fastify/view'
 import ejs from 'ejs'
 import Fastify from 'fastify'
-import fs from 'fs'
 import path from 'path'
 
 import { configureDb, getDb } from './db/index.js'
@@ -56,10 +55,5 @@ fastify.listen({ port: PORT, host: '0.0.0.0' }, (err) => {
     process.exit(1)
   }
   console.log(`File Logger → http://localhost:${PORT}`)
-  if (!fs.existsSync(DB_PATH)) {
-    console.log('  No database found — run `npm run ingest` first.')
-
-    return
-  }
   startWatcher({ logsDir: LOGS_DIR, dbPath: DB_PATH })
 })
