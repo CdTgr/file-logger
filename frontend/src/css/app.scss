@@ -21,19 +21,20 @@ body {
 body::before {
   content: '';
   position: fixed;
-  inset: 0;
+  /* Extend 30px past every viewport edge so the blur boundary is always off-screen */
+  inset: -30px;
   z-index: -1;
   background-image: url('/bg.png');
+  /* 170% zooms into the wave core — tighter crop, cleaner abstract gradient */
   background-size: cover;
-  background-position: center;
+  background-position: center 40%;
   background-repeat: no-repeat;
-  /* +70° rotates blue waves into purple/violet; blur(15px) softens the image into an ambient glow */
-  filter: hue-rotate(70deg) saturate(1.30) brightness(0.80) blur(15px);
+  /* 100° shifts the blue waves toward pink/magenta to match #ff33d6 primary */
+  filter: hue-rotate(100deg) saturate(1.30) brightness(0.80) blur(15px);
 }
 
-/* Light mode — same purple shift, just slightly lighter; keep saturation so glass has color to blur */
 body.body--light::before {
-  filter: hue-rotate(70deg) saturate(1.05) brightness(1.15) blur(15px);
+  filter: hue-rotate(100deg) saturate(1.05) brightness(1.15) blur(15px);
 }
 
 /* ── Transparent layout layers ── */
@@ -45,6 +46,16 @@ body.body--light::before {
 .q-tab-panels,
 .q-tab-panel {
   background: transparent !important;
+}
+
+/* Quasar renders .q-panel-parent (overflow:hidden) > .q-panel.scroll (overflow:auto, height:100%)
+   Both clip card shadows. Page-level scrolling makes the panel scroll container unnecessary. */
+.q-panel-parent,
+.q-tab-panels,
+.q-tab-panel,
+.q-panel {
+  overflow: visible !important;
+  height: auto !important;
 }
 
 /* ── Header — frosted glass ── */
@@ -60,7 +71,7 @@ body.body--light::before {
 
 .body--dark .app-header {
   background: rgba(2, 8, 24, 0.75) !important;
-  border-bottom-color: rgba(160, 100, 255, 0.14);
+  border-bottom-color: rgba(255, 51, 214, 0.14);
   color: #ffffff;
 }
 
@@ -120,16 +131,16 @@ body.body--light::before {
   border: 0.5px solid rgba(255, 255, 255, 0.55) !important;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.70) inset,
-    0 4px 24px rgba(80, 0, 120, 0.12),
+    0 4px 24px rgba(200, 0, 140, 0.12),
     0 1px 3px rgba(0, 0, 0, 0.08) !important;
   transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 .body--dark .q-card {
   background: rgba(4, 14, 38, 0.42) !important;
-  border-color: rgba(160, 100, 255, 0.18) !important;
+  border-color: rgba(255, 51, 214, 0.18) !important;
   box-shadow:
-    0 1px 0 rgba(180, 130, 255, 0.10) inset,
+    0 1px 0 rgba(255, 130, 230, 0.10) inset,
     0 8px 32px rgba(0, 10, 40, 0.65),
     0 1px 4px rgba(0, 0, 0, 0.40) !important;
 }
@@ -151,7 +162,7 @@ body.body--light::before {
 
 .body--dark .q-table__container {
   background: rgba(3, 12, 34, 0.42) !important;
-  border-color: rgba(160, 100, 255, 0.12) !important;
+  border-color: rgba(255, 51, 214, 0.12) !important;
 }
 
 .q-table {
@@ -196,7 +207,7 @@ body.body--light::before {
 
 .body--dark .q-menu {
   background: rgba(4, 14, 40, 0.92) !important;
-  border-color: rgba(160, 100, 255, 0.14) !important;
+  border-color: rgba(255, 51, 214, 0.14) !important;
   box-shadow:
     0 8px 32px rgba(0, 10, 50, 0.65),
     0 2px 8px rgba(0, 0, 0, 0.40) !important;
@@ -214,8 +225,27 @@ body.body--light::before {
 
 .body--dark .q-date {
   background: rgba(4, 14, 40, 0.92) !important;
-  border-color: rgba(160, 100, 255, 0.14) !important;
+  border-color: rgba(255, 51, 214, 0.14) !important;
   box-shadow: 0 12px 48px rgba(0, 10, 50, 0.70) !important;
+}
+
+/* ── Dialog card — opaque enough for readable form content ── */
+.q-dialog .q-card {
+  background: rgba(245, 242, 255, 0.90) !important;
+  border-color: rgba(255, 255, 255, 0.70) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.80) inset,
+    0 16px 48px rgba(180, 0, 120, 0.18),
+    0 2px 8px rgba(0, 0, 0, 0.10) !important;
+}
+
+.body--dark .q-dialog .q-card {
+  background: rgba(8, 6, 28, 0.90) !important;
+  border-color: rgba(255, 51, 214, 0.18) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 130, 230, 0.08) inset,
+    0 16px 48px rgba(0, 0, 40, 0.70),
+    0 2px 8px rgba(0, 0, 0, 0.40) !important;
 }
 
 /* ── Dialog backdrop blur ── */
@@ -273,6 +303,11 @@ body.body--light::before {
   box-shadow:
     0 4px 24px rgba(10, 132, 255, 0.45),
     0 1px 4px rgba(0, 0, 0, 0.30) !important;
+}
+
+/* ── Dark mode text contrast — $secondary (#202635) is dark navy, invisible on dark backgrounds ── */
+.body--dark .text-secondary {
+  color: rgba(255, 255, 255, 0.52) !important;
 }
 
 /* ── Level badges ── */

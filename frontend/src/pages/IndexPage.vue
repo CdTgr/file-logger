@@ -109,7 +109,6 @@
             v-model="draftFrom"
             outlined
             label="From"
-            readonly
             style="width: 100%"
           >
             <template #append>
@@ -135,13 +134,7 @@
             </template>
           </q-input>
 
-          <q-input
-            v-model="draftTo"
-            outlined
-            label="To"
-            readonly
-            style="width: 100%"
-          >
+          <q-input v-model="draftTo" outlined label="To" style="width: 100%">
             <template #append>
               <q-icon name="sym_o_event" class="cursor-pointer">
                 <q-popup-proxy

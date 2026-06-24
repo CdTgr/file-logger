@@ -36,39 +36,41 @@
 
     <q-card bordered class="q-mb-md">
       <q-card-section>
-        <div class="row items-center q-gutter-sm q-mb-sm">
+        <div class="row items-center justify-between q-gutter-sm q-mb-sm">
           <span class="text-subtitle1">Log Volume Over Time</span>
-          <q-btn-toggle
-            v-model="interval"
-            flat
-            no-caps
-            :options="[
-              { label: 'Min', value: 'minute' },
-              { label: 'Hour', value: 'hour' },
-              { label: 'Day', value: 'day' },
-            ]"
-            @update:model-value="loadTimeline"
-          />
-          <q-btn-toggle
-            v-model="stacked"
-            flat
-            no-caps
-            :options="[
-              { label: 'Total', value: false },
-              { label: 'Stacked', value: true },
-            ]"
-            @update:model-value="loadTimeline"
-          />
-          <q-btn-toggle
-            v-model="chartType"
-            flat
-            no-caps
-            :options="[
-              { label: 'Bar', value: 'bar' },
-              { label: 'Line', value: 'area' },
-            ]"
-            @update:model-value="loadTimeline"
-          />
+          <div class="row items-center q-gutter-sm">
+            <q-btn-toggle
+              v-model="interval"
+              rounded
+              no-caps
+              :options="[
+                { label: 'Min', value: 'minute' },
+                { label: 'Hour', value: 'hour' },
+                { label: 'Day', value: 'day' },
+              ]"
+              @update:model-value="loadTimeline"
+            />
+            <q-btn-toggle
+              v-model="stacked"
+              rounded
+              no-caps
+              :options="[
+                { label: 'Total', value: false },
+                { label: 'Stacked', value: true },
+              ]"
+              @update:model-value="loadTimeline"
+            />
+            <q-btn-toggle
+              v-model="chartType"
+              rounded
+              no-caps
+              :options="[
+                { label: 'Bar', value: 'bar' },
+                { label: 'Line', value: 'area' },
+              ]"
+              @update:model-value="loadTimeline"
+            />
+          </div>
         </div>
         <TimelineChart
           :series="timelineSeries"
