@@ -1,0 +1,7 @@
+# Node
+/node_modules
+
+# Logs
+/logs/*
+/logs.db
+/logs.db-*

@@ -1,0 +1,8 @@
+node_modules
+logs
+logs.db
+logs.db-shm
+logs.db-wal
+.git
+.gitignore
+*.md

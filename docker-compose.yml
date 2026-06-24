@@ -1,0 +1,22 @@
+services:
+  log-dashboard:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./logs:/app/logs        # host log files → container (read by watcher too)
+      - db-data:/app/data       # SQLite DB persisted across restarts
+    environment:
+      - DB_PATH=/app/data/logs.db
+      - PORT=3000
+      - POLL_MS=5000   # polling interval in ms; fallback for when fs.watch events don't fire (Docker Desktop on macOS/Windows)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s        # allow time for initial ingest
+
+volumes:
+  db-data:
