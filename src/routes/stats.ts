@@ -38,11 +38,12 @@ export async function statsRoutes(
 
   fastify.get('/api/stats/timeline', async (request, reply) => {
     const q = request.query as Record<string, string>
-    const bucket = bucketExpr(q.interval || 'hour')
+    const bucket = bucketExpr(q.interval || 'day')
     const rows = await sql<{ bucket: string; count: string }[]>`
       SELECT ${bucket} as bucket, COUNT(*) as count FROM logs
       WHERE 1=1 ${fileFilter(q.file)} ${levelFilter(q.level)} ${fromFilter(q.from)} ${toFilter(q.to)}
       GROUP BY bucket ORDER BY bucket
+      LIMIT 500
     `
 
     return reply.send(rows.map((r) => ({ ...r, count: Number(r.count) })))
@@ -50,11 +51,12 @@ export async function statsRoutes(
 
   fastify.get('/api/stats/timeline-stacked', async (request, reply) => {
     const q = request.query as Record<string, string>
-    const bucket = bucketExpr(q.interval || 'hour')
+    const bucket = bucketExpr(q.interval || 'day')
     const rows = await sql<{ bucket: string; level: string; count: string }[]>`
       SELECT ${bucket} as bucket, level, COUNT(*) as count FROM logs
       WHERE 1=1 ${fileFilter(q.file)} ${fromFilter(q.from)} ${toFilter(q.to)}
       GROUP BY bucket, level ORDER BY bucket
+      LIMIT 3000
     `
 
     return reply.send(rows.map((r) => ({ ...r, count: Number(r.count) })))

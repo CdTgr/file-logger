@@ -159,7 +159,22 @@ function downloadLogFile() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+function defaultDateRange() {
+  const to = new Date()
+  const from = new Date(to)
+  from.setDate(from.getDate() - 30)
+  const fmt30 = (d) => d.toISOString().slice(0, 10)
+  return { from: fmt30(from), to: fmt30(to) }
+}
+
 async function init() {
+  // Set default 30-day range for dashboard filters
+  const range = defaultDateRange()
+  const dashFrom = qs('#dash-from')
+  const dashTo = qs('#dash-to')
+  if (dashFrom && !dashFrom.value) dashFrom.value = range.from
+  if (dashTo && !dashTo.value) dashTo.value = range.to
+
   // Tabs
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
@@ -172,6 +187,7 @@ async function init() {
       tab.classList.add('active')
       qs(`#tab-${tab.dataset.tab}`).classList.add('active')
       if (tab.dataset.tab === 'charts') loadCharts()
+      if (tab.dataset.tab === 'logs') searchLogs(1)
     })
   })
 
@@ -238,7 +254,7 @@ async function init() {
     } catch {}
   }
 
-  await Promise.all([loadDashboard(), searchLogs(1)])
+  await loadDashboard()
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -505,7 +521,8 @@ async function loadUrlTable() {
 }
 
 // ── Logs ──────────────────────────────────────────────────────────────────────
-const rowCache = {}
+const rowCache = new Map()
+const ROW_CACHE_MAX = 500
 
 async function searchLogs(page) {
   state.logPage = page
@@ -537,9 +554,11 @@ async function searchLogs(page) {
       return
     }
 
-    data.rows.forEach((r) => {
-      rowCache[r.id] = r
-    })
+    // Evict oldest entries to keep cache bounded
+    for (const r of data.rows) {
+      if (rowCache.size >= ROW_CACHE_MAX) rowCache.delete(rowCache.keys().next().value)
+      rowCache.set(r.id, r)
+    }
 
     tbody.innerHTML = data.rows
       .map((r) => {
@@ -582,7 +601,7 @@ function changePage(dir) {
 
 // ── Detail modal ──────────────────────────────────────────────────────────────
 function showDetail(id) {
-  const r = rowCache[id]
+  const r = rowCache.get(id)
   if (!r) return
   const modal = qs('#modalOverlay')
   modal.classList.add('open')
