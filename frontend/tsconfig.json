@@ -3,6 +3,7 @@
     "module": "Preserve",
     "strict": true,
     "lib": ["es2022", "dom"],
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "src/*": ["src/*"],
