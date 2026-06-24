@@ -1,10 +1,7 @@
 import fastifyStatic from '@fastify/static'
-import fastifyView from '@fastify/view'
-import ejs from 'ejs'
 import Fastify from 'fastify'
 import path from 'path'
 
-import { sql } from './db/index.js'
 import { initDb } from './db/schema.js'
 import { registerApiRoutes } from './routes/index.js'
 import { startWatcher } from './watcher.js'
@@ -12,43 +9,23 @@ import { startWatcher } from './watcher.js'
 const LOGS_DIR = process.env.LOGS_DIR || path.join(process.cwd(), 'logs')
 const PORT = parseInt(process.env.PORT || '3000', 10)
 
-// Views and public assets live in src/ (works for both tsx dev and compiled prod)
-const SRC_DIR = path.join(__dirname, '..', 'src')
-const VIEWS_DIR = path.join(SRC_DIR, 'views')
-const PUBLIC_DIR = path.join(SRC_DIR, 'public')
+// In dev (tsx), __dirname = src/; in prod (node dist/), __dirname = dist/
+// Both cases: go up one level, then into src/public
+const PUBLIC_DIR = path.join(__dirname, '..', 'src', 'public')
 
 const fastify = Fastify({ logger: false })
 
-fastify.register(fastifyView, {
-  engine: { ejs },
-  root: VIEWS_DIR,
-  layout: undefined,
-})
-
 fastify.register(fastifyStatic, {
   root: PUBLIC_DIR,
-  prefix: '/public/',
+  prefix: '/',
+  wildcard: false,
 })
 
 fastify.register(registerApiRoutes, { logsDir: LOGS_DIR })
 
-fastify.get<{ Querystring: { file?: string } }>('/', async (request, reply) => {
-  const selectedFile = request.query.file || ''
-  let files: string[] = []
-  try {
-    const rows = await sql<{ log_file: string }[]>`
-      SELECT DISTINCT log_file FROM logs ORDER BY log_file
-    `
-    files = rows.map((r) => r.log_file)
-  } catch {
-    /* DB not ready yet */
-  }
-
-  return reply.view('index.ejs', {
-    files,
-    selectedFile,
-    dbReady: files.length > 0,
-  })
+// SPA fallback — any route not matched by API or static files serves index.html
+fastify.setNotFoundHandler((_req, reply) => {
+  void reply.sendFile('index.html')
 })
 
 fastify.setErrorHandler((err, _req, reply) => {

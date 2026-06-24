@@ -1,0 +1,30 @@
+@import 'quasar.variables';
+
+.lvl {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-family: monospace;
+}
+.lvl-INFO    { background: rgba(33, 186, 69, 0.15);   color: #21BA45; }
+.lvl-DEBUG   { background: rgba(49, 204, 236, 0.15);  color: #31CCEC; }
+.lvl-WARN    { background: rgba(242, 192, 55, 0.15);  color: #F2C037; }
+.lvl-ERROR   { background: rgba(193, 0, 21, 0.2);     color: #ff4d63; }
+.lvl-FATAL   { background: rgba(156, 39, 176, 0.2);   color: #ce93d8; }
+.lvl-TRACE   { background: rgba(255, 255, 255, 0.07); color: #aaa; }
+
+.mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
+
+.q-table__top { padding: 8px 16px; }
+
+.page-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(29, 29, 29, 0.85);
+  z-index: 9999;
+}
