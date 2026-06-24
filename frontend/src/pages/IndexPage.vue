@@ -31,7 +31,14 @@
             @click="download"
           />
 
-          <q-btn :loading="ingesting" label="Ingest" icon="sync" flat dense @click="ingest" />
+          <q-btn
+            :loading="ingesting"
+            label="Ingest"
+            icon="sync"
+            flat
+            dense
+            @click="ingest"
+          />
 
           <q-chip outline color="primary" icon="storage">
             {{ fmt(store.totalEntries) }} entries
@@ -98,10 +105,16 @@ async function ingest() {
   try {
     const result = await api.ingest(false)
     if (result.success) {
-      Notify.create({ type: 'positive', message: `Ingested ${fmt(result.totalInserted)} new rows` })
+      Notify.create({
+        type: 'positive',
+        message: `Ingested ${fmt(result.totalInserted)} new rows`,
+      })
       await Promise.all([store.fetchStatus(), store.fetchFiles()])
     } else {
-      Notify.create({ type: 'negative', message: result.error ?? 'Ingest failed' })
+      Notify.create({
+        type: 'negative',
+        message: result.error ?? 'Ingest failed',
+      })
     }
   } catch (e) {
     Notify.create({ type: 'negative', message: String(e) })

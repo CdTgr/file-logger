@@ -33,5 +33,13 @@ export const useAppStore = defineStore('app', () => {
     history.pushState({}, '', url)
   }
 
-  return { selectedFile, files, dbReady, totalEntries, fetchStatus, fetchFiles, selectFile }
+  return {
+    selectedFile,
+    files,
+    dbReady,
+    totalEntries,
+    fetchStatus,
+    fetchFiles,
+    selectFile,
+  }
 })

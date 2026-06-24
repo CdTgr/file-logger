@@ -16,12 +16,14 @@ function qs(params: Record<string, string | undefined>): string {
     if (v) p.set(k, v)
   }
   const s = p.toString()
+
   return s ? '?' + s : ''
 }
 
 async function get<T>(url: string): Promise<T> {
   const res = await fetch(url)
   if (!res.ok) throw new Error(await res.text())
+
   return res.json() as Promise<T>
 }
 
@@ -45,13 +47,19 @@ export const api = {
     ),
 
   summary: (filters: LogFilters) =>
-    get<SummaryStats>('/api/stats/summary' + qs(filters as Record<string, string>)),
+    get<SummaryStats>(
+      '/api/stats/summary' + qs(filters as Record<string, string>),
+    ),
 
   levels: (filters: LogFilters) =>
-    get<LevelCount[]>('/api/stats/levels' + qs(filters as Record<string, string>)),
+    get<LevelCount[]>(
+      '/api/stats/levels' + qs(filters as Record<string, string>),
+    ),
 
   timeline: (filters: LogFilters & { interval?: string }) =>
-    get<TimelineBucket[]>('/api/stats/timeline' + qs(filters as Record<string, string>)),
+    get<TimelineBucket[]>(
+      '/api/stats/timeline' + qs(filters as Record<string, string>),
+    ),
 
   timelineStacked: (filters: LogFilters & { interval?: string }) =>
     get<TimelineStackedBucket[]>(
@@ -62,7 +70,9 @@ export const api = {
     get<UrlStat[]>('/api/stats/urls' + qs(filters as Record<string, string>)),
 
   httpStatus: (filters: LogFilters) =>
-    get<HttpStatusStat[]>('/api/stats/http-status' + qs(filters as Record<string, string>)),
+    get<HttpStatusStat[]>(
+      '/api/stats/http-status' + qs(filters as Record<string, string>),
+    ),
 
   ingest: (force = false) =>
     fetch('/api/ingest', {
@@ -70,8 +80,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ force }),
     }).then(
-      (r) => r.json() as Promise<{ success: boolean; totalInserted: number; error?: string }>,
+      (r) =>
+        r.json() as Promise<{
+          success: boolean
+          totalInserted: number
+          error?: string
+        }>,
     ),
 
-  downloadUrl: (file: string) => `/api/files/download?file=${encodeURIComponent(file)}`,
+  downloadUrl: (file: string) =>
+    `/api/files/download?file=${encodeURIComponent(file)}`,
 }

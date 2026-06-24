@@ -14,8 +14,24 @@
       >
         <template #append><q-icon name="search" /></template>
       </q-input>
-      <q-input v-model="from" type="date" dense outlined dark label="From" style="width:150px" />
-      <q-input v-model="to" type="date" dense outlined dark label="To" style="width:150px" />
+      <q-input
+        v-model="from"
+        type="date"
+        dense
+        outlined
+        dark
+        label="From"
+        style="width: 150px"
+      />
+      <q-input
+        v-model="to"
+        type="date"
+        dense
+        outlined
+        dark
+        label="To"
+        style="width: 150px"
+      />
       <q-select
         v-model="level"
         :options="levelOpts"
@@ -64,16 +80,14 @@
       @row-click="(_e, row) => openDetail(row as LogRow)"
     >
       <template #body-cell-level="{ value }">
-        <q-td><span :class="`lvl lvl-${value}`">{{ value }}</span></q-td>
+        <q-td
+          ><span :class="`lvl lvl-${value}`">{{ value }}</span></q-td
+        >
       </template>
       <template #body-cell-status_code="{ value }">
         <q-td
           :style="
-            value >= 500
-              ? 'color:#ff4d63'
-              : value >= 400
-                ? 'color:#F2C037'
-                : ''
+            value >= 500 ? 'color:#ff4d63' : value >= 400 ? 'color:#F2C037' : ''
           "
           >{{ value ?? '' }}</q-td
         >
@@ -93,8 +107,16 @@
     </q-table>
 
     <div class="row items-center q-mt-sm q-gutter-sm">
-      <q-btn icon="chevron_left" flat dense :disable="page <= 1" @click="load(page - 1)" />
-      <span class="text-caption text-secondary">Page {{ page }} of {{ totalPages }}</span>
+      <q-btn
+        icon="chevron_left"
+        flat
+        dense
+        :disable="page <= 1"
+        @click="load(page - 1)"
+      />
+      <span class="text-caption text-secondary"
+        >Page {{ page }} of {{ totalPages }}</span
+      >
       <q-btn
         icon="chevron_right"
         flat
@@ -119,7 +141,9 @@ import LogDetailModal from './LogDetailModal.vue'
 const store = useAppStore()
 
 const today = new Date().toISOString().slice(0, 10)
-const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000)
+  .toISOString()
+  .slice(0, 10)
 
 const search = ref('')
 const from = ref(thirtyDaysAgo)
@@ -133,16 +157,32 @@ const loading = ref(false)
 const detailOpen = ref(false)
 const detailRow = ref<LogRow | null>(null)
 
-const levelOpts = ['ALL', 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'].map((l) => ({
+const levelOpts = [
+  'ALL',
+  'TRACE',
+  'DEBUG',
+  'INFO',
+  'WARN',
+  'ERROR',
+  'FATAL',
+].map((l) => ({
   label: l,
   value: l,
 }))
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)))
-const pagination = computed(() => ({ rowsPerPage: limit.value, page: page.value }))
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(total.value / limit.value)),
+)
+const pagination = computed(() => ({
+  rowsPerPage: limit.value,
+  page: page.value,
+}))
 
 function fmtTs(iso: string) {
   return iso
-    ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'medium' })
+    ? new Date(iso).toLocaleString('en-GB', {
+        dateStyle: 'short',
+        timeStyle: 'medium',
+      })
     : '–'
 }
 
@@ -215,8 +255,8 @@ async function load(p: number) {
     })
     rows.value = data.rows
     total.value = data.total
-  } catch {}
-  finally {
+  } catch {
+  } finally {
     loading.value = false
   }
 }

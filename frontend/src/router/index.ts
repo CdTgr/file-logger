@@ -1,4 +1,8 @@
-import { createMemoryHistory, createRouter, createWebHashHistory } from 'vue-router'
+import {
+  createMemoryHistory,
+  createRouter,
+  createWebHashHistory,
+} from 'vue-router'
 
 import routes from './routes'
 

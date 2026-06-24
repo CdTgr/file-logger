@@ -1,7 +1,9 @@
 <template>
   <div style="min-height: 280px" class="row items-center justify-center">
     <q-spinner v-if="loading" size="48px" color="primary" />
-    <div v-else-if="!series.length || !labels.length" class="text-secondary">No data</div>
+    <div v-else-if="!series.length || !labels.length" class="text-secondary">
+      No data
+    </div>
     <ApexChart
       v-else
       :key="type + stableKey"

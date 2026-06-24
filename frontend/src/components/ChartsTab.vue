@@ -1,8 +1,24 @@
 <template>
   <div>
     <div class="row q-gutter-sm q-mb-md items-end">
-      <q-input v-model="from" type="date" dense outlined dark label="From" style="width:150px" />
-      <q-input v-model="to" type="date" dense outlined dark label="To" style="width:150px" />
+      <q-input
+        v-model="from"
+        type="date"
+        dense
+        outlined
+        dark
+        label="From"
+        style="width: 150px"
+      />
+      <q-input
+        v-model="to"
+        type="date"
+        dense
+        outlined
+        dark
+        label="To"
+        style="width: 150px"
+      />
       <q-btn label="Apply" color="primary" dense @click="loadAll" />
       <q-btn label="Reset" flat dense @click="reset" />
     </div>
@@ -52,7 +68,9 @@ import HttpStatusChart from './HttpStatusChart.vue'
 
 const store = useAppStore()
 const today = new Date().toISOString().slice(0, 10)
-const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000)
+  .toISOString()
+  .slice(0, 10)
 const from = ref(thirtyDaysAgo)
 const to = ref(today)
 const httpStatus = ref<HttpStatusStat[]>([])
@@ -92,11 +110,14 @@ async function loadAll() {
   loadingHttp.value = true
   loadingUrls.value = true
   try {
-    const [h, u] = await Promise.all([api.httpStatus(filters()), api.urls(filters())])
+    const [h, u] = await Promise.all([
+      api.httpStatus(filters()),
+      api.urls(filters()),
+    ])
     httpStatus.value = h
     urlRows.value = u
-  } catch {}
-  finally {
+  } catch {
+  } finally {
     loadingHttp.value = false
     loadingUrls.value = false
   }

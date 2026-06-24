@@ -2,7 +2,9 @@
   <q-dialog v-model="open">
     <q-card dark style="min-width: 560px; max-width: 760px; width: 100%">
       <q-card-section class="row items-center q-pb-none">
-        <span v-if="row" :class="`lvl lvl-${row.level} q-mr-sm`">{{ row.level }}</span>
+        <span v-if="row" :class="`lvl lvl-${row.level} q-mr-sm`">{{
+          row.level
+        }}</span>
         <span class="text-subtitle1">Log Entry</span>
         <q-space />
         <q-btn icon="close" flat round dense v-close-popup />
@@ -67,7 +69,9 @@ const fields = computed(() => {
       r.method ? ['Method', r.method] : null,
       r.url ? ['URL', r.url] : null,
       r.status_code != null ? ['Status', String(r.status_code)] : null,
-      r.response_time != null ? ['Response Time', fmtRt(r.response_time)] : null,
+      r.response_time != null
+        ? ['Response Time', fmtRt(r.response_time)]
+        : null,
       r.hostname ? ['Hostname', r.hostname] : null,
       r.pid ? ['PID', String(r.pid)] : null,
       r.req_id ? ['Req ID', r.req_id] : null,
