@@ -4,7 +4,7 @@
 
 ## System Overview
 
-File Logger is a self-hosted log viewer. It watches structured log files from a `logs/` directory, ingests them into PostgreSQL incrementally, and serves a browser dashboard for search and visualization.
+File Logger is a self-hosted log viewer. It watches structured log files from a `logs/` directory, ingests them into PostgreSQL incrementally, and serves a Vue 3 + Quasar SPA for search and visualization.
 
 ```
 logs/ (bind-mounted)
@@ -22,10 +22,13 @@ logs/ (bind-mounted)
          ▼
    [server.ts]          Fastify HTTP server
     ├── /api/*          JSON API routes (async postgres queries)
-    └── /               EJS-rendered dashboard
+    └── /               Static file handler → serves built Quasar SPA
          │
          ▼
-   Browser (vanilla JS + Chart.js)
+   Browser (Vue 3 + Quasar + Pinia + ApexCharts)
+   ├── Dashboard tab    Timeline chart + level donut + summary cards
+   ├── Logs tab         Server-side paginated table + full-text search
+   └── Charts tab       HTTP status donut + top URLs table
 ```
 
 Optional: `[ingest.ts]` — CLI one-shot batch re-ingestion (`yarn ingest`), also callable via `POST /api/ingest`.
@@ -36,11 +39,12 @@ Optional: `[ingest.ts]` — CLI one-shot batch re-ingestion (`yarn ingest`), als
 
 Fastify HTTP server. Responsibilities:
 - Call `initDb()` at startup (idempotent PostgreSQL DDL)
-- Register `@fastify/view` (EJS engine, root = `src/views/`)
-- Register `@fastify/static` (public assets at `/public/`)
+- Register `@fastify/static` pointing at `src/public/` (the built Quasar SPA) at prefix `/`
 - Mount API route plugins from `src/routes/`
-- Serve the dashboard at `GET /` (EJS render with server-side file list and pre-selected file)
+- Serve `index.html` as the 404 fallback (SPA catch-all for hash router)
 - Start the async file watcher via `await startWatcher({ logsDir })`
+
+No EJS or server-side rendering — the entire UI is a client-side SPA.
 
 ### `src/ingest.ts`
 
@@ -53,7 +57,7 @@ Parsing pipeline per file:
 2. Match lines against `TS_RE` timestamp regex
 3. Build a row object (plain text or pino JSON)
 4. Call `ensurePartitionsForTimestamps()` before each batch insert
-5. Bulk-insert rows into PostgreSQL (`sql(batch, ...cols)`, 10,000 rows/batch)
+5. Bulk-insert rows into PostgreSQL (`sql(batch, ...cols)`, 5,000 rows/sub-batch max — 65,000 params < PostgreSQL's 65,534 limit)
 6. Upsert `ingestion_log` entry via `ON CONFLICT`
 
 No FTS rebuild step needed — `message_tsv` is a generated column, always current.
@@ -101,60 +105,75 @@ Six Fastify plugins, each in its own file:
 
 All routes use `sql` from `src/db/index.ts` directly. Dynamic WHERE clauses use `WHERE 1=1 ${fileFilter(q.file)} ...` pattern with helpers returning `sql\`AND ...\`` fragments.
 
-### `src/views/`
+### `frontend/`
 
-EJS templates. `index.ejs` is the shell; it `include`s partials:
+Standalone Quasar v2 SPA project (Vue 3, TypeScript, Pinia, Vue Router, ApexCharts). Has its own `package.json` and `yarn.lock`.
 
 ```
-index.ejs
-  ├── partials/head.ejs        CSS link, Chart.js CDN
-  ├── partials/topbar.ejs      Logo, file select, ingest/download buttons
-  ├── partials/tabs.ejs        Tab navigation
-  ├── partials/dashboard.ejs   Dashboard panel (timeline + level chart)
-  ├── partials/charts-panel.ejs HTTP status + URL table
-  ├── partials/logs-panel.ejs  Searchable log table
-  ├── partials/modal.ejs       Log entry detail modal
-  └── partials/statusbar.ejs   Bottom status bar
+frontend/
+├── src/
+│   ├── api/
+│   │   ├── index.ts        Typed fetch wrappers for all backend endpoints
+│   │   └── types.ts        Shared TypeScript interfaces (LogRow, StatsRow, etc.)
+│   ├── boot/
+│   │   ├── pinia.ts        Creates and installs Pinia
+│   │   └── apexcharts.ts   Registers <ApexChart> component globally
+│   ├── components/
+│   │   ├── DashboardTab.vue    Summary cards + TimelineChart + LevelChart
+│   │   ├── LogsTab.vue         QTable server-side pagination + LogDetailModal
+│   │   ├── ChartsTab.vue       HttpStatusChart + UrlTable
+│   │   ├── TimelineChart.vue   ApexCharts bar/area with level colours
+│   │   ├── LevelChart.vue      ApexCharts donut
+│   │   ├── HttpStatusChart.vue ApexCharts donut (1xx–5xx)
+│   │   └── LogDetailModal.vue  QDialog showing all fields + pretty-printed message
+│   ├── pages/
+│   │   └── IndexPage.vue   QLayout — file selector, ingest btn, download btn, QTabs
+│   ├── router/
+│   │   ├── index.ts        createWebHashHistory router
+│   │   └── routes.ts       Single route: / → IndexPage, catch-all → /
+│   ├── stores/
+│   │   └── appStore.ts     Pinia store: selectedFile, files[], dbReady, totalEntries
+│   └── css/
+│       ├── app.scss            Level badge classes, mono font, table tweaks
+│       └── quasar.variables.scss   Brand colours ($primary, $negative, etc.)
+├── quasar.config.ts        Build target, dev proxy (/api → :3000), Quasar plugins
+├── tsconfig.json           Extends @quasar/app-vite preset
+└── package.json            quasar, vue, pinia, vue-router, vue3-apexcharts
 ```
-
-The server injects no JS globals — EJS server-renders the file list and selected file into the `<select>` dropdown, so `app.js` simply reads `document.getElementById('fileSelect').value` on init.
 
 ### `src/public/`
 
-Static assets served at `/public/`:
-- `css/styles.css` — all dashboard styles
-- `js/app.js` — all client-side logic (vanilla JS, no framework)
+Build output directory for the Quasar SPA. **Gitignored** — generated by `yarn build:ui` locally or by the Docker builder stage. Served by `@fastify/static` at `/`.
 
-## Data Flow — Page Load
+## Data Flow — App Load
 
-1. Browser requests `GET /?file=CMS-API-error-1.log`
-2. Server queries PostgreSQL for distinct log files
-3. Server renders `index.ejs` with `{ files, selectedFile, dbReady }`
-4. EJS topbar renders `<option selected>` for the selected file
-5. Browser receives fully rendered HTML; `app.js` loads
-6. `init()` reads `#fileSelect.value` → `state.file = 'CMS-API-error-1.log'`
-7. `loadDashboard()` and `searchLogs(1)` fire with that file pre-filtered
+1. Browser requests `GET /` → Fastify serves `src/public/index.html` (built SPA shell)
+2. Vue boots, Pinia initialises, `IndexPage` mounts
+3. `onMounted`: reads `?file=` from URL → sets `store.selectedFile`; calls `store.fetchStatus()` + `store.fetchFiles()`
+4. `fetchFiles()` calls `GET /api/files` → populates the file selector dropdown
+5. Active tab component mounts and calls its data-loading functions with current filters
 
 ## Data Flow — Ingest Button
 
 1. User clicks "Ingest" in the topbar
-2. `triggerIngest()` in `app.js` sends `POST /api/ingest`
+2. `IndexPage` calls `api.ingest()` → `POST /api/ingest`
 3. Server calls `runIngest({ force, logsDir })`
 4. Response `{ success: true, totalInserted: N }` returned to browser
-5. `app.js` shows a toast and reloads the dashboard
+5. Quasar `Notify` shows success toast; `store.fetchStatus()` + `store.fetchFiles()` refresh
 
 ## Technology Choices
 
 | Concern | Choice | Reason |
 |---|---|---|
 | HTTP server | Fastify v5 | Faster than Express, TypeScript-first, schema validation |
-| Templates | EJS | Minimal, no build step, server-side file list injection |
+| Frontend framework | Vue 3 + Quasar v2 | Component library with QTable virtual scroll, dark theme, no custom CSS needed |
+| State management | Pinia | Vue 3 idiomatic, TypeScript-first, minimal boilerplate |
+| Router | Vue Router 4 (hash mode) | Hash mode requires no server catch-all config |
+| Charts | ApexCharts + vue3-apexcharts | Dark theme, time-series, donut/bar/area — no CDN dependency |
 | Database | PostgreSQL 14+ | Scales past SQLite limits; monthly partitions for 15 GB+ datasets |
 | Postgres client | `postgres` (porsager v3) | TypeScript-native, tagged template literals, built-in pool |
 | FTS | `tsvector` generated column + GIN index | Always current, no rebuild step, `plainto_tsquery` for search |
 | Partitioning | `PARTITION BY RANGE (timestamp_unix)` monthly | Drop old partitions instantly; queries scan only relevant months |
 | Package manager | Yarn 4 (corepack) | Pinned via `packageManager` field; `nodeLinker: node-modules` |
-| Client JS | Vanilla JS | No build step needed |
-| Charts | Chart.js (CDN) | Mature, zero build config |
-| Language | TypeScript | Type safety for query builders and route handlers |
+| Language | TypeScript | Type safety for query builders, route handlers, and API client |
 | Lint | ESLint + typescript-eslint + prettier | Enforced via `eslint-plugin-prettier` as last config |

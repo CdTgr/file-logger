@@ -9,8 +9,8 @@ COPY package.json yarn.lock .yarnrc.yml ./
 RUN yarn install --immutable
 
 # Frontend deps
-COPY frontend/package.json frontend/.yarnrc.yml ./frontend/
-RUN cd frontend && corepack enable && yarn install --immutable
+COPY frontend/package.json frontend/yarn.lock frontend/.yarnrc.yml ./frontend/
+RUN cd frontend && yarn install --immutable
 
 # Build backend
 COPY tsconfig.json ./

@@ -10,7 +10,7 @@
 **File Logger** is a self-hosted log viewer and visualization dashboard for structured log files. It:
 1. **Watches** `.log`/`.txt` files in a `logs/` directory — on startup the watcher backfills all existing content incrementally, then tails for new entries in real time
 2. **Stores** entries in a PostgreSQL database with monthly range partitions on `timestamp_unix`
-3. **Serves** a browser dashboard with search, filters, timeline charts, level distribution, HTTP stats, and a log table
+3. **Serves** a Vue 3 + Quasar SPA with three tabs: Dashboard (timeline + level charts), Logs (server-side paginated table with full-text search), and Charts (HTTP status + top URLs)
 
 No blocking ingest at startup — the server is available immediately. An optional CLI (`yarn ingest`) exists for manual full re-ingestion.
 
@@ -20,7 +20,7 @@ No blocking ingest at startup — the server is available immediately. An option
 
 | File | Purpose |
 |---|---|
-| `src/server.ts` | Fastify HTTP server; calls `initDb()`, starts watcher, mounts API routes and EJS views |
+| `src/server.ts` | Fastify HTTP server; calls `initDb()`, starts watcher, mounts API routes, serves built SPA |
 | `src/ingest.ts` | One-shot log parser; exports `runIngest()` used by CLI and `POST /api/ingest` |
 | `src/watcher.ts` | Async live file watcher; 4 MB chunked reads; `isReading` guard; debounced `fs.watch` + polling |
 | `src/db/index.ts` | Exports `sql` — postgres pool singleton (porsager v3) |
@@ -28,9 +28,10 @@ No blocking ingest at startup — the server is available immediately. An option
 | `src/db/partitions.ts` | `ensurePartitionsForTimestamps()` — creates monthly partitions on demand, cached in a `Set` |
 | `src/routes/index.ts` | Registers all route plugins under `registerApiRoutes()` |
 | `src/routes/utils.ts` | Returns `sql\`...\`` fragments: `fileFilter`, `levelFilter`, `fromFilter`, `toFilter`, `bucketExpr` |
-| `src/views/index.ejs` | Main EJS layout; includes all partials |
-| `src/public/js/app.js` | Client-side logic (tabs, charts, log table, ingest/download buttons) |
-| `src/public/css/styles.css` | Dashboard styles |
+| `frontend/src/pages/IndexPage.vue` | Main SPA layout — file selector, ingest button, QTabs |
+| `frontend/src/api/index.ts` | Typed fetch wrappers for all backend endpoints |
+| `frontend/src/stores/appStore.ts` | Pinia store — selected file, file list, DB status |
+| `frontend/quasar.config.ts` | Quasar build config; dev proxy (`/api` → `:3000`) |
 
 ---
 
@@ -41,11 +42,11 @@ No blocking ingest at startup — the server is available immediately. An option
 The system has two cooperating processes sharing a PostgreSQL database:
 
 - **Watcher** (started by the server at boot): backfills existing log files in 4 MB chunks, then tails for new lines; inserts rows via postgres bulk insert; updates `ingestion_log.file_size` offset to prevent duplicates on restart
-- **Server** (Fastify): calls `initDb()`, starts the watcher, serves the dashboard page (EJS SSR) and JSON API
+- **Server** (Fastify): calls `initDb()`, starts the watcher, serves the built Vue/Quasar SPA as static files and a JSON API
 
 An optional **Ingest** CLI (`yarn ingest`) does a full synchronous re-parse of all files — useful for historical data or forced re-ingestion.
 
-The browser is a single-page app with three tabs (Dashboard, Charts, Logs). Vanilla JS + Chart.js, no frontend framework.
+The browser is a Vue 3 + Quasar SPA (hash router, Pinia state, ApexCharts). In dev the Quasar dev server (port 9000) proxies `/api` to the backend (port 3000). In production the built SPA is served as static files by Fastify.
 
 ---
 
@@ -89,12 +90,14 @@ Key endpoints:
 → See [wiki/development.md](./wiki/development.md)
 
 ```bash
-corepack enable      # activate Yarn v4
-yarn install
-yarn dev             # hot-reload dev server at http://localhost:3000
+corepack enable           # activate Yarn v4
+yarn install              # backend deps
+cd frontend && yarn install  # frontend deps (first time)
+yarn dev                  # backend API at http://localhost:3000
+yarn dev:ui               # Quasar dev server at http://localhost:9000
 ```
 
-Key scripts: `build`, `start`, `dev`, `lint`, `format`, `ingest`, `ingest:force`, `ingest:check`
+Key scripts: `build`, `build:ui`, `start`, `dev`, `dev:ui`, `lint`, `format`, `ingest`, `ingest:force`, `ingest:check`
 
 ---
 
