@@ -24,7 +24,7 @@
 
           <q-btn
             v-if="store.selectedFile"
-            icon="download"
+            icon="sym_o_download"
             label="Download"
             flat
             no-caps
@@ -34,18 +34,18 @@
           <q-btn
             :loading="ingesting"
             label="Ingest"
-            icon="sync"
+            icon="sym_o_sync"
             flat
             no-caps
             @click="ingest"
           />
 
-          <q-chip outline color="primary" icon="storage">
+          <q-chip outline color="primary" icon="sym_o_storage">
             {{ fmt(store.totalEntries) }} entries
           </q-chip>
 
           <q-btn
-            :icon="$q.dark.isActive ? 'light_mode' : 'dark_mode'"
+            :icon="$q.dark.isActive ? 'sym_o_light_mode' : 'sym_o_dark_mode'"
             flat
             round
             :title="

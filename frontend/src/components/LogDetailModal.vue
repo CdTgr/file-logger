@@ -7,7 +7,7 @@
         }}</span>
         <span class="text-subtitle1">Log Entry</span>
         <q-space />
-        <q-btn icon="close" flat round v-close-popup />
+        <q-btn icon="sym_o_close" flat round v-close-popup />
       </q-card-section>
 
       <q-separator />

@@ -9,7 +9,7 @@
         readonly
       >
         <template #append>
-          <q-icon name="event" class="cursor-pointer">
+          <q-icon name="sym_o_event" class="cursor-pointer">
             <q-popup-proxy
               cover
               transition-show="scale"
@@ -37,7 +37,7 @@
 
       <q-input v-model="to" outlined label="To" style="width: 160px" readonly>
         <template #append>
-          <q-icon name="event" class="cursor-pointer">
+          <q-icon name="sym_o_event" class="cursor-pointer">
             <q-popup-proxy
               cover
               transition-show="scale"

@@ -10,7 +10,7 @@
         @keyup.enter="load(1)"
         @clear="load(1)"
       >
-        <template #append><q-icon name="search" /></template>
+        <template #append><q-icon name="sym_o_search" /></template>
       </q-input>
 
       <q-input
@@ -21,7 +21,7 @@
         readonly
       >
         <template #append>
-          <q-icon name="event" class="cursor-pointer">
+          <q-icon name="sym_o_event" class="cursor-pointer">
             <q-popup-proxy
               cover
               transition-show="scale"
@@ -45,7 +45,7 @@
 
       <q-input v-model="to" outlined label="To" style="width: 160px" readonly>
         <template #append>
-          <q-icon name="event" class="cursor-pointer">
+          <q-icon name="sym_o_event" class="cursor-pointer">
             <q-popup-proxy
               cover
               transition-show="scale"
