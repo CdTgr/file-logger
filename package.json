@@ -1,6 +1,6 @@
 {
   "name": "file-logger",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "File Logger — live log ingestion, search, and visualization dashboard",
   "scripts": {
     "build": "tsc",
