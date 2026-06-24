@@ -4,7 +4,7 @@ export default configure(function () {
   return {
     boot: ['pinia', 'apexcharts'],
     css: ['app.scss'],
-    extras: ['material-icons'],
+    extras: ['material-symbols-outlined'],
     build: {
       target: {
         browser: ['es2019', 'edge88', 'firefox78', 'chrome87', 'safari13.1'],
@@ -25,12 +25,12 @@ export default configure(function () {
       },
     },
     framework: {
+      iconSet: 'material-symbols-outlined',
       config: {
         dark: true,
         notify: { position: 'top-right', timeout: 3000 },
       },
-      extras: ['material-icons'],
-      plugins: ['Notify', 'Dialog'],
+      plugins: ['Notify', 'Dialog', 'LocalStorage'],
     },
     animations: [],
   }

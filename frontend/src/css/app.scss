@@ -1,5 +1,24 @@
 @import 'quasar.variables';
 
+/* ── Header ── */
+.app-header {
+  box-shadow: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.body--dark .app-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: #1d1d1d;
+  color: #ffffff;
+}
+
+.app-header-tabs {
+  background: transparent;
+}
+
+/* ── Level badges ── */
 .lvl {
   font-size: 11px;
   font-weight: 700;
@@ -11,17 +30,17 @@
 
 .lvl-INFO {
   background: rgba(33, 186, 69, 0.15);
-  color: #21BA45;
+  color: #21ba45;
 }
 
 .lvl-DEBUG {
   background: rgba(49, 204, 236, 0.15);
-  color: #31CCEC;
+  color: #31ccec;
 }
 
 .lvl-WARN {
   background: rgba(242, 192, 55, 0.15);
-  color: #F2C037;
+  color: #f2c037;
 }
 
 .lvl-ERROR {
@@ -39,6 +58,12 @@
   color: #aaa;
 }
 
+.body--light .lvl-TRACE {
+  background: rgba(0, 0, 0, 0.06);
+  color: #888;
+}
+
+/* ── Monospace cells ── */
 .mono {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px;
@@ -48,6 +73,7 @@
   padding: 8px 16px;
 }
 
+/* ── Page loading overlay ── */
 .page-loading {
   position: fixed;
   inset: 0;

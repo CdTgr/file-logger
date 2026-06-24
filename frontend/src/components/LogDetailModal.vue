@@ -1,16 +1,16 @@
 <template>
   <q-dialog v-model="open">
-    <q-card dark style="min-width: 560px; max-width: 760px; width: 100%">
+    <q-card style="min-width: 560px; max-width: 760px; width: 100%">
       <q-card-section class="row items-center q-pb-none">
         <span v-if="row" :class="`lvl lvl-${row.level} q-mr-sm`">{{
           row.level
         }}</span>
         <span class="text-subtitle1">Log Entry</span>
         <q-space />
-        <q-btn icon="close" flat round dense v-close-popup />
+        <q-btn icon="close" flat round v-close-popup />
       </q-card-section>
 
-      <q-separator dark />
+      <q-separator />
 
       <q-card-section
         v-if="row"
@@ -26,12 +26,14 @@
             <div class="text-body2 mono">{{ v }}</div>
           </template>
         </div>
-        <q-separator dark class="q-mb-sm" />
+        <q-separator class="q-mb-sm" />
         <div class="text-caption text-secondary q-mb-xs">Message</div>
         <pre
           class="mono text-body2"
           style="white-space: pre-wrap; word-break: break-all; margin: 0"
-          >{{ prettyMsg }}</pre
+        >
+          {{ prettyMsg }}
+          </pre
         >
       </q-card-section>
     </q-card>

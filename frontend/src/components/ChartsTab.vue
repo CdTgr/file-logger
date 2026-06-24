@@ -1,31 +1,67 @@
 <template>
   <div>
-    <div class="row q-gutter-sm q-mb-md items-end">
+    <div class="row items-center q-gutter-sm q-mb-md">
       <q-input
         v-model="from"
-        type="date"
-        dense
         outlined
-        dark
         label="From"
-        style="width: 150px"
-      />
-      <q-input
-        v-model="to"
-        type="date"
-        dense
-        outlined
-        dark
-        label="To"
-        style="width: 150px"
-      />
-      <q-btn label="Apply" color="primary" dense @click="loadAll" />
-      <q-btn label="Reset" flat dense @click="reset" />
+        style="width: 160px"
+        readonly
+      >
+        <template #append>
+          <q-icon name="event" class="cursor-pointer">
+            <q-popup-proxy
+              cover
+              transition-show="scale"
+              transition-hide="scale"
+            >
+              <q-date v-model="from" mask="YYYY-MM-DD">
+                <div class="row items-center justify-end">
+                  <q-btn
+                    v-close-popup
+                    label="Close"
+                    color="primary"
+                    flat
+                    no-caps
+                  />
+                </div>
+              </q-date>
+            </q-popup-proxy>
+          </q-icon>
+        </template>
+      </q-input>
+
+      <q-input v-model="to" outlined label="To" style="width: 160px" readonly>
+        <template #append>
+          <q-icon name="event" class="cursor-pointer">
+            <q-popup-proxy
+              cover
+              transition-show="scale"
+              transition-hide="scale"
+            >
+              <q-date v-model="to" mask="YYYY-MM-DD">
+                <div class="row items-center justify-end">
+                  <q-btn
+                    v-close-popup
+                    label="Close"
+                    color="primary"
+                    flat
+                    no-caps
+                  />
+                </div>
+              </q-date>
+            </q-popup-proxy>
+          </q-icon>
+        </template>
+      </q-input>
+
+      <q-btn label="Apply" color="primary" no-caps @click="loadAll" />
+      <q-btn label="Reset" flat no-caps @click="reset" />
     </div>
 
     <div class="row q-col-gutter-md">
       <div class="col-12 col-md-5">
-        <q-card dark bordered>
+        <q-card bordered>
           <q-card-section>
             <div class="text-subtitle1 q-mb-sm">HTTP Status Distribution</div>
             <HttpStatusChart :data="httpStatus" :loading="loadingHttp" />
@@ -34,7 +70,7 @@
       </div>
 
       <div class="col-12 col-md-7">
-        <q-card dark bordered>
+        <q-card bordered>
           <q-card-section>
             <div class="text-subtitle1 q-mb-sm">Top URLs</div>
             <div v-if="loadingUrls" class="row justify-center q-pa-lg">
@@ -42,7 +78,6 @@
             </div>
             <q-table
               v-else
-              dark
               flat
               dense
               :rows="urlRows"

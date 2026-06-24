@@ -1,47 +1,90 @@
 <template>
   <div>
-    <div class="row q-gutter-sm q-mb-md items-end">
+    <div class="row items-center q-gutter-sm q-mb-md">
       <q-input
         v-model="from"
-        type="date"
-        dense
         outlined
         label="From"
-        dark
         style="width: 160px"
-      />
-      <q-input
-        v-model="to"
-        type="date"
-        dense
-        outlined
-        label="To"
-        dark
-        style="width: 160px"
-      />
+        readonly
+      >
+        <template #append>
+          <q-icon name="event" class="cursor-pointer">
+            <q-popup-proxy
+              cover
+              transition-show="scale"
+              transition-hide="scale"
+            >
+              <q-date
+                v-model="from"
+                mask="YYYY-MM-DD"
+                @update:model-value="closeProxy"
+              >
+                <div class="row items-center justify-end">
+                  <q-btn
+                    v-close-popup
+                    label="Close"
+                    color="primary"
+                    flat
+                    no-caps
+                  />
+                </div>
+              </q-date>
+            </q-popup-proxy>
+          </q-icon>
+        </template>
+      </q-input>
+
+      <q-input v-model="to" outlined label="To" style="width: 160px" readonly>
+        <template #append>
+          <q-icon name="event" class="cursor-pointer">
+            <q-popup-proxy
+              cover
+              transition-show="scale"
+              transition-hide="scale"
+            >
+              <q-date
+                v-model="to"
+                mask="YYYY-MM-DD"
+                @update:model-value="closeProxy"
+              >
+                <div class="row items-center justify-end">
+                  <q-btn
+                    v-close-popup
+                    label="Close"
+                    color="primary"
+                    flat
+                    no-caps
+                  />
+                </div>
+              </q-date>
+            </q-popup-proxy>
+          </q-icon>
+        </template>
+      </q-input>
+
       <q-select
         v-model="level"
         :options="levelOptions"
-        dense
         outlined
         label="Level"
-        dark
         style="width: 140px"
         emit-value
         map-options
       />
-      <q-btn label="Apply" color="primary" dense @click="loadAll" />
-      <q-btn label="Reset" flat dense @click="reset" />
+
+      <q-btn label="Apply" color="primary" no-caps @click="loadAll" />
+      <q-btn label="Reset" flat no-caps @click="reset" />
     </div>
 
     <div class="row q-gutter-md q-mb-lg">
-      <q-card dark bordered class="col" style="min-width: 130px">
+      <q-card bordered class="col" style="min-width: 130px">
         <q-card-section>
           <div class="text-caption text-secondary">Total Entries</div>
           <div class="text-h5 text-weight-bold">{{ fmt(summary.total) }}</div>
         </q-card-section>
       </q-card>
-      <q-card dark bordered class="col" style="min-width: 130px">
+      <q-card bordered class="col" style="min-width: 130px">
         <q-card-section>
           <div class="text-caption text-secondary">Errors</div>
           <div class="text-h5 text-weight-bold text-negative">
@@ -49,7 +92,7 @@
           </div>
         </q-card-section>
       </q-card>
-      <q-card dark bordered class="col" style="min-width: 130px">
+      <q-card bordered class="col" style="min-width: 130px">
         <q-card-section>
           <div class="text-caption text-secondary">Warnings</div>
           <div class="text-h5 text-weight-bold text-warning">
@@ -57,7 +100,7 @@
           </div>
         </q-card-section>
       </q-card>
-      <q-card dark bordered class="col-auto">
+      <q-card bordered class="col-auto">
         <q-card-section>
           <div class="text-caption text-secondary">Date Range</div>
           <div class="text-body2">{{ fmtTs(summary.earliest) }}</div>
@@ -68,14 +111,14 @@
       </q-card>
     </div>
 
-    <q-card dark bordered class="q-mb-md">
+    <q-card bordered class="q-mb-md">
       <q-card-section>
         <div class="row items-center q-gutter-sm q-mb-sm">
           <span class="text-subtitle1">Log Volume Over Time</span>
           <q-btn-toggle
             v-model="interval"
-            dense
             flat
+            no-caps
             :options="[
               { label: 'Min', value: 'minute' },
               { label: 'Hour', value: 'hour' },
@@ -85,8 +128,8 @@
           />
           <q-btn-toggle
             v-model="stacked"
-            dense
             flat
+            no-caps
             :options="[
               { label: 'Total', value: false },
               { label: 'Stacked', value: true },
@@ -95,8 +138,8 @@
           />
           <q-btn-toggle
             v-model="chartType"
-            dense
             flat
+            no-caps
             :options="[
               { label: 'Bar', value: 'bar' },
               { label: 'Line', value: 'area' },
@@ -113,7 +156,7 @@
       </q-card-section>
     </q-card>
 
-    <q-card dark bordered>
+    <q-card bordered>
       <q-card-section>
         <div class="text-subtitle1 q-mb-sm">Level Distribution</div>
         <LevelChart :levels="levels" :loading="loadingLevels" />
@@ -179,12 +222,17 @@ const warnCount = computed(
 function fmt(n: number | null) {
   return (n ?? 0).toLocaleString()
 }
+
 function fmtTs(iso: string | null) {
   if (!iso) return '–'
   return new Date(iso).toLocaleString('en-GB', {
     dateStyle: 'short',
     timeStyle: 'medium',
   })
+}
+
+function closeProxy() {
+  // q-popup-proxy closes automatically on date selection via v-close-popup on inner btn
 }
 
 function filters() {

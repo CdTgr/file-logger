@@ -4,6 +4,7 @@
     <div v-else-if="!levels.length" class="text-secondary">No data</div>
     <ApexChart
       v-else
+      :key="$q.dark.isActive ? 'd' : 'l'"
       type="donut"
       width="100%"
       height="220"
@@ -14,11 +15,13 @@
 </template>
 
 <script setup lang="ts">
+import { useQuasar } from 'quasar'
 import { computed } from 'vue'
 
 import type { LevelCount } from '../api/types'
 
 const props = defineProps<{ levels: LevelCount[]; loading?: boolean }>()
+const $q = useQuasar()
 
 const COLORS: Record<string, string> = {
   INFO: '#21BA45',
@@ -30,13 +33,16 @@ const COLORS: Record<string, string> = {
 }
 
 const series = computed(() => props.levels.map((l) => l.count))
-const options = computed(() => ({
-  chart: { background: 'transparent', animations: { enabled: false } },
-  theme: { mode: 'dark' as const },
-  labels: props.levels.map((l) => l.level),
-  colors: props.levels.map((l) => COLORS[l.level] ?? '#ff33d6'),
-  legend: { labels: { colors: '#ddd' } },
-  tooltip: { theme: 'dark' as const },
-  dataLabels: { style: { colors: ['#1D1D1D'] } },
-}))
+const options = computed(() => {
+  const dark = $q.dark.isActive
+  return {
+    chart: { background: 'transparent', animations: { enabled: false } },
+    theme: { mode: dark ? ('dark' as const) : ('light' as const) },
+    labels: props.levels.map((l) => l.level),
+    colors: props.levels.map((l) => COLORS[l.level] ?? '#ff33d6'),
+    legend: { labels: { colors: dark ? '#ddd' : '#333' } },
+    tooltip: { theme: dark ? ('dark' as const) : ('light' as const) },
+    dataLabels: { style: { colors: [dark ? '#1D1D1D' : '#fff'] } },
+  }
+})
 </script>
