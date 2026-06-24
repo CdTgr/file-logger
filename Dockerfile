@@ -1,21 +1,27 @@
+FROM node:24-alpine AS builder
+
+WORKDIR /app
+
+RUN corepack enable
+
+COPY package.json yarn.lock .yarnrc.yml ./
+RUN yarn install --immutable
+
+COPY tsconfig.json ./
+COPY src/ src/
+RUN yarn build
+
+# ── Runtime image ──────────────────────────────────────────────────────────────
 FROM node:24-alpine
 
 WORKDIR /app
 
-# Install dependencies (dev deps needed for build)
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY src/views src/views
+COPY src/public src/public
+COPY package.json ./
 
-# Copy source and build
-COPY tsconfig.json ./
-COPY src/ src/
-RUN npm run build
-
-# Prune dev dependencies
-RUN npm prune --omit=dev
-
-# logs/ is bind-mounted from the host at runtime
-# data/ holds the SQLite DB and is a named volume for persistence
 RUN mkdir -p /app/logs /app/data
 
 ENV DB_PATH=/app/data/logs.db \

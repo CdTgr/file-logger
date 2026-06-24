@@ -1,8 +1,10 @@
 node_modules
+dist
 logs
 logs.db
 logs.db-shm
 logs.db-wal
 .git
 .gitignore
+.yarn/cache
 *.md
