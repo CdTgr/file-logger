@@ -1,0 +1,36 @@
+<div class="panel" id="tab-charts">
+  <div class="filters">
+    <div class="filter-group">
+      <label>From</label>
+      <input type="date" id="ch-from">
+    </div>
+    <div class="filter-group">
+      <label>To</label>
+      <input type="date" id="ch-to">
+    </div>
+    <button class="btn btn-primary" onclick="loadCharts()">Apply</button>
+    <button class="btn btn-ghost" onclick="resetFilters('ch')">Reset</button>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-toolbar">
+      <h3>HTTP Status Code Distribution</h3>
+      <div class="seg-group" id="httpChartTypeSeg">
+        <div class="seg active" data-val="bar">Bar</div>
+        <div class="seg" data-val="doughnut">Doughnut</div>
+      </div>
+    </div>
+    <div style="max-width:500px; margin:0 auto"><canvas id="httpStatusChart"></canvas></div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-toolbar">
+      <h3>Top 25 Request Paths</h3>
+    </div>
+    <div id="urlTableWrap">
+      <div class="empty">
+        <div class="spinner"></div>Loading…
+      </div>
+    </div>
+  </div>
+</div>

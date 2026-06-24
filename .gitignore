@@ -1,7 +1,17 @@
 # Node
 /node_modules
+/dist
+
+# Yarn
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
 
 # Logs
 /logs/*
 /logs.db
 /logs.db-*
+
+# Agent
+.agent/tasks.md

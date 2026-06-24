@@ -1,0 +1,78 @@
+<div class="panel active" id="tab-dashboard">
+  <div class="filters">
+    <div class="filter-group">
+      <label>From</label>
+      <input type="date" id="dash-from">
+    </div>
+    <div class="filter-group">
+      <label>To</label>
+      <input type="date" id="dash-to">
+    </div>
+    <div class="filter-group">
+      <label>Level</label>
+      <select id="dash-level">
+        <option value="ALL">All Levels</option>
+        <option value="TRACE">TRACE</option>
+        <option value="DEBUG">DEBUG</option>
+        <option value="INFO">INFO</option>
+        <option value="WARN">WARN</option>
+        <option value="ERROR">ERROR</option>
+        <option value="FATAL">FATAL</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="loadDashboard()">Apply</button>
+    <button class="btn btn-ghost" onclick="resetFilters('dash')">Reset</button>
+  </div>
+
+  <div class="cards" id="summaryCards">
+    <div class="card">
+      <div class="card-label">Total Entries</div>
+      <div class="card-value" id="cardTotal">–</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Errors</div>
+      <div class="card-value" style="color:var(--ERROR)" id="cardErrors">–</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Warnings</div>
+      <div class="card-value" style="color:var(--WARN)" id="cardWarns">–</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Earliest</div>
+      <div class="card-value" style="font-size:14px" id="cardEarliest">–</div>
+      <div class="card-sub" id="cardLatest"></div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-toolbar">
+      <h3>Log Volume Over Time</h3>
+      <div class="seg-group" id="intervalSeg">
+        <div class="seg active" data-val="minute">Minute</div>
+        <div class="seg" data-val="hour">Hour</div>
+        <div class="seg" data-val="day">Day</div>
+      </div>
+      <div class="seg-group" id="timelineTypeSeg">
+        <div class="seg active" data-val="bar">Bar</div>
+        <div class="seg" data-val="line">Line</div>
+      </div>
+      <div class="seg-group" id="stackSeg">
+        <div class="seg active" data-val="stacked">Stacked</div>
+        <div class="seg" data-val="total">Total</div>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="timelineChart"></canvas></div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-toolbar">
+      <h3>Log Level Distribution</h3>
+      <div class="seg-group" id="levelChartTypeSeg">
+        <div class="seg active" data-val="doughnut">Doughnut</div>
+        <div class="seg" data-val="pie">Pie</div>
+        <div class="seg" data-val="bar">Bar</div>
+      </div>
+    </div>
+    <div style="max-width:420px; margin:0 auto"><canvas id="levelChart"></canvas></div>
+  </div>
+</div>

@@ -1,14 +1,38 @@
 {
   "name": "file-logger",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "File Logger — live log ingestion, search, and visualization dashboard",
   "scripts": {
-    "ingest": "node ingest.js",
-    "start": "node server.js",
-    "watch": "node watcher.js",
-    "dev": "node ingest.js && node server.js"
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "lint": "eslint src/",
+    "format": "prettier --write src/",
+    "ingest": "tsx src/ingest.ts",
+    "ingest:force": "tsx src/ingest.ts -- --force",
+    "ingest:check": "tsx src/ingest.ts -- --check",
+    "watch": "tsx src/watcher.ts"
   },
   "dependencies": {
-    "express": "^4.18.2"
-  }
+    "@fastify/static": "^9.1.3",
+    "@fastify/view": "^12.0.0",
+    "ejs": "^3.1.10",
+    "fastify": "^5.8.5"
+  },
+  "devDependencies": {
+    "@types/ejs": "^3.1.5",
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-simple-import-sort": "^13.0.0",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  },
+  "packageManager": "yarn@4.17.0"
 }

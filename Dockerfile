@@ -2,19 +2,24 @@ FROM node:24-alpine
 
 WORKDIR /app
 
-# Install dependencies first (cached layer)
+# Install dependencies (dev deps needed for build)
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
-# Copy application source
-COPY ingest.js server.js watcher.js ./
-COPY public/ public/
+# Copy source and build
+COPY tsconfig.json ./
+COPY src/ src/
+RUN npm run build
+
+# Prune dev dependencies
+RUN npm prune --omit=dev
 
 # logs/ is bind-mounted from the host at runtime
 # data/ holds the SQLite DB and is a named volume for persistence
 RUN mkdir -p /app/logs /app/data
 
 ENV DB_PATH=/app/data/logs.db \
+    LOGS_DIR=/app/logs \
     PORT=3000 \
     NODE_ENV=production
 

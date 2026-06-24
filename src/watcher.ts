@@ -1,37 +1,15 @@
-'use strict'
+import { DatabaseSync } from 'node:sqlite'
 
-const fs = require('fs')
-const path = require('path')
-const { DatabaseSync } = require('node:sqlite')
+import fs from 'fs'
+import path from 'path'
 
-const LOGS_DIR = path.join(__dirname, 'logs')
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'logs.db')
+import { FileState, LogRow, WatcherConfig } from './custom-types/index.js'
 
-function findLogFiles(dir, base = '') {
-  const results = []
-  try {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const rel = base ? `${base}/${entry.name}` : entry.name
-      if (entry.isDirectory()) {
-        results.push(...findLogFiles(path.join(dir, entry.name), rel))
-      } else if (entry.name.endsWith('.log') || entry.name.endsWith('.txt')) {
-        results.push(rel)
-      }
-    }
-  } catch {
-    /* dir disappeared mid-scan */
-  }
-  return results
-}
-const SETTLE_MS = 300 // debounce after fs.watch event fires
-const FLUSH_MS = 5000 // commit a dangling pending row after this many ms of silence
-// Polling interval — catches changes when fs.watch events don't propagate
-// (Docker Desktop on macOS, NFS mounts, etc.). Set POLL_MS=0 to disable.
+const SETTLE_MS = 300
+const FLUSH_MS = 5000
 const POLL_MS = parseInt(process.env.POLL_MS ?? '5000', 10)
 
-// ── Parser helpers (mirrors ingest.js) ───────────────────────────────────────
-
-const PINO_LEVELS = {
+const PINO_LEVELS: Record<number, string> = {
   10: 'TRACE',
   20: 'DEBUG',
   30: 'INFO',
@@ -39,9 +17,10 @@ const PINO_LEVELS = {
   50: 'ERROR',
   60: 'FATAL',
 }
+
 const TS_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2} [+-]\d{2}:\d{2}): (.*)$/s
 
-function detectLevel(msg, pinoLevel) {
+function detectLevel(msg: string, pinoLevel: number | null): string {
   if (pinoLevel && PINO_LEVELS[pinoLevel]) return PINO_LEVELS[pinoLevel]
   const u = msg.toUpperCase()
   if (u.includes('FATAL')) return 'FATAL'
@@ -50,17 +29,23 @@ function detectLevel(msg, pinoLevel) {
   if (u.includes('WARN')) return 'WARN'
   if (u.includes('DEBUG')) return 'DEBUG'
   if (u.includes('TRACE')) return 'TRACE'
+
   return 'INFO'
 }
 
-function parseTimestamp(ts) {
+function parseTimestamp(ts: string): { iso: string; unix: number } | null {
   const iso = ts.replace(' ', 'T').replace(/ ([+-])/, '$1')
   const d = new Date(iso)
+
   return isNaN(d.getTime()) ? null : { iso: d.toISOString(), unix: d.getTime() }
 }
 
-function buildRow(logFile, parsed, msgRaw) {
-  const row = {
+function buildRow(
+  logFile: string,
+  parsed: { iso: string; unix: number },
+  msgRaw: string,
+): LogRow {
+  const row: LogRow = {
     log_file: logFile,
     timestamp: parsed.iso,
     timestamp_unix: parsed.unix,
@@ -96,17 +81,39 @@ function buildRow(logFile, parsed, msgRaw) {
   } else {
     row.level = detectLevel(msgRaw, null)
   }
+
   return row
 }
 
-// ── Watcher ──────────────────────────────────────────────────────────────────
+function findLogFiles(dir: string, base = ''): string[] {
+  const results: string[] = []
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const rel = base ? `${base}/${entry.name}` : entry.name
+      if (entry.isDirectory())
+        results.push(...findLogFiles(path.join(dir, entry.name), rel))
+      else if (entry.name.endsWith('.log') || entry.name.endsWith('.txt'))
+        results.push(rel)
+    }
+  } catch {
+    /* dir disappeared mid-scan */
+  }
+
+  return results
+}
 
 class LogWatcher {
-  constructor() {
-    // Separate writable connection — server.js uses readonly
-    this.db = new DatabaseSync(DB_PATH)
-    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;')
+  private db: DatabaseSync
+  private insert: ReturnType<DatabaseSync['prepare']>
+  private state = new Map<string, FileState>()
+  private _dirWatchers = new Map<string, fs.FSWatcher>()
+  private _pollTimer: ReturnType<typeof setInterval> | null = null
+  private logsDir: string
 
+  constructor(config: WatcherConfig) {
+    this.logsDir = config.logsDir
+    this.db = new DatabaseSync(config.dbPath)
+    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;')
     this.insert = this.db.prepare(`
       INSERT INTO logs
         (log_file, timestamp, timestamp_unix, level, level_num, message,
@@ -115,45 +122,38 @@ class LogWatcher {
         (:log_file, :timestamp, :timestamp_unix, :level, :level_num, :message,
          :method, :url, :status_code, :response_time, :pid, :hostname, :req_id)
     `)
-
-    // per-file state: { offset, pending, debounceTimer, flushTimer }
-    this.state = new Map()
-
-    this._dirWatchers = new Map() // relDir -> FSWatcher
-    this._pollTimer = null
   }
 
-  // ── Public ────────────────────────────────────────────────────────────────
-
-  start() {
-    // Load known offsets from DB
+  start(): void {
     const ingested = this.db
       .prepare('SELECT log_file, file_size FROM ingestion_log')
-      .all()
+      .all() as {
+      log_file: string
+      file_size: number
+    }[]
     for (const r of ingested) {
       this.state.set(r.log_file, { offset: Number(r.file_size), pending: null })
     }
 
-    // Catch up on any growth since last ingest/watch
-    const existing = findLogFiles(LOGS_DIR)
+    const existing = findLogFiles(this.logsDir)
     for (const f of existing) this._catchUp(f)
 
-    // Try recursive fs.watch (macOS / Windows).
-    // On Linux (Docker) this throws — fall back to watching each directory individually.
     try {
-      const w = fs.watch(LOGS_DIR, { recursive: true }, (event, filename) => {
-        if (!filename) return
-        const rel = filename.replace(/\\/g, '/') // normalise Windows separators
-        if (rel.endsWith('.log') || rel.endsWith('.txt'))
-          this._scheduleRead(rel)
-      })
+      const w = fs.watch(
+        this.logsDir,
+        { recursive: true },
+        (_event, filename) => {
+          if (!filename) return
+          const rel = filename.replace(/\\/g, '/')
+          if (rel.endsWith('.log') || rel.endsWith('.txt'))
+            this._scheduleRead(rel)
+        },
+      )
       w.on('error', () => {})
       this._dirWatchers.set('.', w)
     } catch {
-      // Watch LOGS_DIR and every subdirectory found now; new subdirs are picked
-      // up during the poll cycle when they appear.
-      this._watchDir(LOGS_DIR, '')
-      const walkDirs = (dir, base) => {
+      this._watchDir(this.logsDir, '')
+      const walkDirs = (dir: string, base: string): void => {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
           if (!entry.isDirectory()) continue
           const rel = base ? `${base}/${entry.name}` : entry.name
@@ -161,18 +161,16 @@ class LogWatcher {
           walkDirs(path.join(dir, entry.name), rel)
         }
       }
-      walkDirs(LOGS_DIR, '')
+      walkDirs(this.logsDir, '')
     }
 
-    // Polling fallback — essential in Docker where bind-mount events may not
-    // propagate through the VM layer (Docker Desktop on macOS/Windows).
     if (POLL_MS > 0) {
       this._pollTimer = setInterval(() => this._poll(), POLL_MS)
       this._pollTimer.unref()
     }
 
     const count = existing.filter(
-      (f) => fs.statSync(path.join(LOGS_DIR, f)).size > 0,
+      (f) => fs.statSync(path.join(this.logsDir, f)).size > 0,
     ).length
     const pollNote = POLL_MS > 0 ? ` + polling every ${POLL_MS / 1000}s` : ''
     console.log(
@@ -180,57 +178,52 @@ class LogWatcher {
     )
   }
 
-  stop() {
-    clearInterval(this._pollTimer)
+  stop(): void {
+    if (this._pollTimer) clearInterval(this._pollTimer)
     for (const w of this._dirWatchers.values()) w.close()
     this.db.close()
   }
 
-  // Watch a single directory; fires on file changes AND new subdirs appearing.
-  _watchDir(absDir, relBase) {
+  private _watchDir(absDir: string, relBase: string): void {
     if (this._dirWatchers.has(relBase)) return
     try {
-      const w = fs.watch(absDir, (event, filename) => {
+      const w = fs.watch(absDir, (_event, filename) => {
         if (!filename) return
         const rel = relBase ? `${relBase}/${filename}` : filename
         const full = path.join(absDir, filename)
         if (filename.endsWith('.log') || filename.endsWith('.txt')) {
           this._scheduleRead(rel)
         } else if (fs.existsSync(full) && fs.statSync(full).isDirectory()) {
-          // New subdirectory — start watching it
           this._watchDir(full, rel)
         }
       })
       w.on('error', () => {})
       this._dirWatchers.set(relBase, w)
     } catch {
-      /* permission error etc. */
+      /* permission error */
     }
   }
 
-  _poll() {
-    const files = findLogFiles(LOGS_DIR)
+  private _poll(): void {
+    const files = findLogFiles(this.logsDir)
     for (const f of files) {
-      // Watch any new subdirectories that appeared between polls (Linux path)
       const dir = path.dirname(f)
       if (dir !== '.' && !this._dirWatchers.has(dir)) {
-        this._watchDir(path.join(LOGS_DIR, dir), dir)
+        this._watchDir(path.join(this.logsDir, dir), dir)
       }
       this._catchUp(f)
     }
   }
 
-  // ── Internal ──────────────────────────────────────────────────────────────
-
-  _scheduleRead(logFile) {
+  private _scheduleRead(logFile: string): void {
     const s = this.state.get(logFile) ?? { offset: 0, pending: null }
     clearTimeout(s.debounceTimer)
     s.debounceTimer = setTimeout(() => this._readNew(logFile), SETTLE_MS)
     this.state.set(logFile, s)
   }
 
-  _catchUp(logFile) {
-    const filePath = path.join(LOGS_DIR, logFile)
+  private _catchUp(logFile: string): void {
+    const filePath = path.join(this.logsDir, logFile)
     if (!fs.existsSync(filePath)) return
     const { size } = fs.statSync(filePath)
     const s = this.state.get(logFile) ?? { offset: 0, pending: null }
@@ -240,16 +233,14 @@ class LogWatcher {
     }
   }
 
-  _readNew(logFile) {
-    const filePath = path.join(LOGS_DIR, logFile)
+  private _readNew(logFile: string): void {
+    const filePath = path.join(this.logsDir, logFile)
     if (!fs.existsSync(filePath)) return
 
     const { size } = fs.statSync(filePath)
     const s = this.state.get(logFile) ?? { offset: 0, pending: null }
+    if (size <= s.offset) return
 
-    if (size <= s.offset) return // nothing new
-
-    // Read only new bytes
     const len = size - s.offset
     const buf = Buffer.alloc(len)
     const fd = fs.openSync(filePath, 'r')
@@ -257,17 +248,13 @@ class LogWatcher {
     fs.closeSync(fd)
 
     const text = buf.slice(0, bytesRead).toString('utf8')
-
-    // Only process up to the last complete newline (avoids partial lines from
-    // mid-write reads). Save the tail for the next read cycle.
     const lastNl = text.lastIndexOf('\n')
-    if (lastNl === -1) return // no complete line yet
+    if (lastNl === -1) return
 
     const processable = text.slice(0, lastNl + 1)
     const newOffset = s.offset + Buffer.byteLength(processable, 'utf8')
 
-    // Parse lines
-    const committed = []
+    const committed: LogRow[] = []
     for (const line of processable.split('\n')) {
       if (!line.trim()) continue
       const m = line.match(TS_RE)
@@ -280,7 +267,6 @@ class LogWatcher {
       }
     }
 
-    // Write committed rows
     if (committed.length) {
       this._insertRows(logFile, committed, newOffset)
       console.log(
@@ -291,7 +277,6 @@ class LogWatcher {
     s.offset = newOffset
     this.state.set(logFile, s)
 
-    // Flush dangling pending row after silence (last entry in file)
     clearTimeout(s.flushTimer)
     if (s.pending) {
       s.flushTimer = setTimeout(() => {
@@ -304,35 +289,42 @@ class LogWatcher {
     }
   }
 
-  _insertRows(logFile, rows, newFileSize) {
+  private _insertRows(
+    logFile: string,
+    rows: LogRow[],
+    newFileSize: number,
+  ): void {
     this.db.exec('BEGIN')
     try {
-      for (const r of rows) this.insert.run(r)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const r of rows) this.insert.run(r as any)
       this.db.exec('COMMIT')
     } catch (e) {
       this.db.exec('ROLLBACK')
-      console.error('[watcher] insert error:', e.message)
+      console.error('[watcher] insert error:', (e as Error).message)
+
       return
     }
 
-    // Update FTS index incrementally
     try {
-      const ids = this.db
-        .prepare(
-          'SELECT id FROM logs WHERE log_file = ? ORDER BY id DESC LIMIT ?',
-        )
-        .all(logFile, rows.length)
-        .map((r) => Number(r.id))
+      const ids = (
+        this.db
+          .prepare(
+            'SELECT id FROM logs WHERE log_file = ? ORDER BY id DESC LIMIT ?',
+          )
+          .all(logFile, rows.length) as { id: number }[]
+      ).map((r) => Number(r.id))
+
       if (ids.length) {
         this.db.exec('BEGIN')
         const ftsInsert = this.db.prepare(
           'INSERT INTO logs_fts(rowid, message) VALUES (?, ?)',
         )
         for (const id of ids) {
-          const msg =
-            this.db.prepare('SELECT message FROM logs WHERE id = ?').get(id)
-              ?.message ?? ''
-          ftsInsert.run(id, msg)
+          const msgRow = this.db
+            .prepare('SELECT message FROM logs WHERE id = ?')
+            .get(id) as { message: string } | undefined
+          ftsInsert.run(id, msgRow?.message ?? '')
         }
         this.db.exec('COMMIT')
       }
@@ -340,7 +332,6 @@ class LogWatcher {
       /* FTS errors are non-fatal */
     }
 
-    // Update offset in ingestion_log
     const exists = this.db
       .prepare('SELECT 1 FROM ingestion_log WHERE log_file = ?')
       .get(logFile)
@@ -358,23 +349,23 @@ class LogWatcher {
   }
 }
 
-// ── Export & standalone mode ──────────────────────────────────────────────────
-
-function startWatcher() {
-  if (!fs.existsSync(DB_PATH)) {
+export function startWatcher(config: WatcherConfig): LogWatcher | null {
+  const { dbPath } = config
+  if (!fs.existsSync(dbPath)) {
     console.error('[watcher] No database found — run `npm run ingest` first.')
+
     return null
   }
-  const w = new LogWatcher()
+  const w = new LogWatcher(config)
   w.start()
+
   return w
 }
 
-module.exports = { startWatcher }
-
-// Run standalone: `node watcher.js`
 if (require.main === module) {
-  const watcher = startWatcher()
+  const logsDir = process.env.LOGS_DIR || path.join(process.cwd(), 'logs')
+  const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'logs.db')
+  const watcher = startWatcher({ logsDir, dbPath })
   if (!watcher) process.exit(1)
   process.on('SIGINT', () => {
     watcher.stop()
