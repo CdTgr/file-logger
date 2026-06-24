@@ -1,6 +1,6 @@
 @import 'quasar.variables';
 
-/* ── Font ── */
+/* ── Font & rendering ── */
 * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -12,26 +12,33 @@ body {
   transition: background 0.4s ease;
 }
 
-/* ── Gradient mesh background ── */
-body.body--dark {
-  background:
-    radial-gradient(ellipse at 12% 8%, rgba(94, 41, 159, 0.30) 0%, transparent 42%),
-    radial-gradient(ellipse at 88% 92%, rgba(10, 132, 255, 0.22) 0%, transparent 42%),
-    radial-gradient(ellipse at 60% 40%, rgba(191, 90, 242, 0.08) 0%, transparent 55%),
-    #08080f;
+/* ── Wallpaper background via ::before so filter applies only to the image ── */
+body {
   min-height: 100vh;
+  position: relative;
 }
 
-body.body--light {
-  background:
-    radial-gradient(ellipse at 12% 8%, rgba(191, 90, 242, 0.12) 0%, transparent 42%),
-    radial-gradient(ellipse at 88% 92%, rgba(10, 132, 255, 0.14) 0%, transparent 42%),
-    radial-gradient(ellipse at 60% 40%, rgba(48, 209, 88, 0.05) 0%, transparent 55%),
-    #f2f2f7;
-  min-height: 100vh;
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: url('/bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  /* Shift hue to match $primary #0A84FF; deepen saturation + slightly darken */
+  filter: hue-rotate(8deg) saturate(1.25) brightness(0.82);
 }
 
-/* ── Transparent layout layers (let the gradient show through) ── */
+/* Light mode — same image, lightened and partially desaturated for a clean light feel */
+body.body--light::before {
+  filter: hue-rotate(8deg) saturate(0.65) brightness(1.55);
+}
+
+/* ── Transparent layout layers ── */
+#q-app,
+.q-layout,
 .q-layout__section--marginal,
 .q-page-container,
 .q-page,
@@ -40,20 +47,20 @@ body.body--light {
   background: transparent !important;
 }
 
-/* ── Header — frosted glass bar ── */
+/* ── Header — frosted glass ── */
 .app-header {
-  box-shadow: none;
+  box-shadow: none !important;
   backdrop-filter: blur(48px) saturate(200%) brightness(1.02);
   -webkit-backdrop-filter: blur(48px) saturate(200%) brightness(1.02);
-  background: rgba(242, 242, 247, 0.78) !important;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.7);
+  background: rgba(232, 234, 242, 0.72) !important;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.65);
   color: rgba(0, 0, 0, 0.87);
   transition: background 0.4s ease, border-color 0.4s ease;
 }
 
 .body--dark .app-header {
-  background: rgba(8, 8, 15, 0.76) !important;
-  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: rgba(2, 8, 24, 0.75) !important;
+  border-bottom-color: rgba(80, 160, 255, 0.14);
   color: #ffffff;
 }
 
@@ -61,53 +68,97 @@ body.body--light {
   background: transparent !important;
 }
 
+/* ── Tabs — pill selected state (no MUI underline) ── */
+.q-tab__indicator {
+  display: none !important;
+}
+
+.q-tabs__content {
+  padding: 0 8px 4px;
+  gap: 2px;
+}
+
+.q-tab {
+  border-radius: 9px;
+  min-height: 34px;
+  padding: 0 14px;
+  opacity: 0.65;
+  transition: background 0.18s ease, opacity 0.18s ease;
+}
+
+.q-tab--active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.body--light .q-tab--active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+/* ── Buttons — no shadow, no ripple residue ── */
+.q-btn {
+  box-shadow: none !important;
+  border-radius: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.q-btn--round {
+  border-radius: 50% !important;
+}
+
+.q-btn:active {
+  opacity: 0.75;
+}
+
 /* ── Glass cards ── */
 .q-card {
   border-radius: 18px !important;
-  backdrop-filter: blur(32px) saturate(180%) brightness(1.04);
-  -webkit-backdrop-filter: blur(32px) saturate(180%) brightness(1.04);
-  background: rgba(255, 255, 255, 0.60) !important;
-  border: 0.5px solid rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(36px) saturate(200%) brightness(1.06);
+  -webkit-backdrop-filter: blur(36px) saturate(200%) brightness(1.06);
+  background: rgba(255, 255, 255, 0.52) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.80) !important;
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.05),
-    0 8px 28px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+    0 1px 1px rgba(255, 255, 255, 0.60) inset,
+    0 4px 16px rgba(0, 0, 0, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.04) !important;
   transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 .body--dark .q-card {
-  background: rgba(28, 28, 38, 0.55) !important;
-  border-color: rgba(255, 255, 255, 0.10) !important;
+  background: rgba(4, 14, 38, 0.42) !important;
+  border-color: rgba(80, 160, 255, 0.18) !important;
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.35),
-    0 8px 28px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.09) !important;
+    0 1px 0 rgba(100, 180, 255, 0.10) inset,
+    0 8px 32px rgba(0, 10, 40, 0.65),
+    0 1px 4px rgba(0, 0, 0, 0.40) !important;
 }
 
 .q-card .q-separator {
-  opacity: 0.12;
+  opacity: 0.10;
 }
 
 /* ── Table container ── */
 .q-table__container {
-  border-radius: 14px;
+  border-radius: 16px !important;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.45) !important;
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  border: 0.5px solid rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.40) !important;
+  backdrop-filter: blur(28px) saturate(180%) brightness(1.04);
+  -webkit-backdrop-filter: blur(28px) saturate(180%) brightness(1.04);
+  border: 0.5px solid rgba(255, 255, 255, 0.65) !important;
+  box-shadow: none !important;
 }
 
 .body--dark .q-table__container {
-  background: rgba(20, 20, 28, 0.50) !important;
-  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(3, 12, 34, 0.42) !important;
+  border-color: rgba(80, 160, 255, 0.12) !important;
 }
 
 .q-table {
   background: transparent !important;
 }
 
-/* ── Inputs (more rounded) ── */
+/* ── Inputs — rounded, no readonly stigma ── */
 .q-field--outlined .q-field__control {
   border-radius: 12px !important;
 }
@@ -116,56 +167,66 @@ body.body--light {
   border-radius: 12px !important;
 }
 
-/* ── Buttons (pill-ish) ── */
-.q-btn:not(.q-btn--round) {
-  border-radius: 10px;
+/* Readonly date fields — look identical to normal fields */
+.q-field--readonly .q-field__control {
+  cursor: pointer !important;
+}
+
+.q-field--readonly .q-field__control::before {
+  border-style: solid !important;
+}
+
+.q-field--readonly .q-field__native {
+  cursor: pointer !important;
+  color: inherit !important;
+  -webkit-text-fill-color: inherit !important;
 }
 
 /* ── Dropdown menus ── */
 .q-menu {
   border-radius: 14px !important;
-  backdrop-filter: blur(36px) saturate(180%);
-  -webkit-backdrop-filter: blur(36px) saturate(180%);
-  background: rgba(248, 248, 252, 0.92) !important;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  background: rgba(240, 240, 248, 0.90) !important;
   border: 0.5px solid rgba(255, 255, 255, 0.75) !important;
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.10),
-    0 12px 40px rgba(0, 0, 0, 0.08) !important;
+    0 8px 32px rgba(0, 0, 0, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.08) !important;
 }
 
 .body--dark .q-menu {
-  background: rgba(28, 28, 38, 0.92) !important;
-  border-color: rgba(255, 255, 255, 0.10) !important;
+  background: rgba(4, 14, 40, 0.92) !important;
+  border-color: rgba(80, 160, 255, 0.14) !important;
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.45),
-    0 12px 40px rgba(0, 0, 0, 0.38) !important;
+    0 8px 32px rgba(0, 10, 50, 0.65),
+    0 2px 8px rgba(0, 0, 0, 0.40) !important;
 }
 
 /* ── Date picker ── */
 .q-date {
-  border-radius: 18px !important;
-  backdrop-filter: blur(32px) saturate(180%);
-  -webkit-backdrop-filter: blur(32px) saturate(180%);
-  background: rgba(248, 248, 252, 0.94) !important;
-  border: 0.5px solid rgba(255, 255, 255, 0.8) !important;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 20px !important;
+  backdrop-filter: blur(36px) saturate(180%);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  background: rgba(240, 240, 248, 0.92) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.80) !important;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.14) !important;
 }
 
 .body--dark .q-date {
-  background: rgba(28, 28, 38, 0.94) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5) !important;
+  background: rgba(4, 14, 40, 0.92) !important;
+  border-color: rgba(80, 160, 255, 0.14) !important;
+  box-shadow: 0 12px 48px rgba(0, 10, 50, 0.70) !important;
 }
 
 /* ── Dialog backdrop blur ── */
 .q-dialog__backdrop {
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  background: rgba(0, 0, 0, 0.2) !important;
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  background: rgba(0, 0, 0, 0.22) !important;
 }
 
 .body--light .q-dialog__backdrop {
-  background: rgba(0, 0, 0, 0.12) !important;
+  background: rgba(0, 0, 0, 0.10) !important;
 }
 
 /* ── Notifications ── */
@@ -173,6 +234,38 @@ body.body--light {
   border-radius: 14px !important;
   backdrop-filter: blur(32px) saturate(180%);
   -webkit-backdrop-filter: blur(32px) saturate(180%);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18) !important;
+}
+
+/* ── Custom scrollbars ── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.20);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.36);
+}
+
+.body--light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.body--light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.26);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* ── Level badges ── */

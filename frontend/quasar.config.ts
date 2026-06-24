@@ -28,6 +28,7 @@ export default configure(function () {
       iconSet: 'material-symbols-outlined',
       config: {
         dark: true,
+        ripple: false,
         notify: { position: 'top-right', timeout: 3000 },
       },
       plugins: ['Notify', 'Dialog', 'LocalStorage'],
